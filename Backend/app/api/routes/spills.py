@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Path
 from app.schemas.spill import SpillResponse
 
 router = APIRouter(
@@ -28,11 +28,14 @@ MOCK_SPILL = SpillResponse(
 
 
 @router.get("/{spill_id}", response_model=SpillResponse)
-def get_spill(spill_id: str):
-
+def get_spill(
+    spill_id: str = Path(..., description="The unique ID of the spill", example="SP-001")
+):
     if spill_id != MOCK_SPILL.spill_id:
-        return {
-            "error": "Spill not found"
-        }
+        # Indentation fixed here
+        raise HTTPException(
+            status_code=404,
+            detail=f"Spill '{spill_id}' not found"
+        )
 
     return MOCK_SPILL

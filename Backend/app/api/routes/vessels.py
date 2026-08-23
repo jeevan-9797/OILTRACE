@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Path
 from app.schemas.vessel import Vessel
 
 router = APIRouter(
@@ -39,5 +39,14 @@ MOCK_VESSELS = [
 
 
 @router.get("/spills/{spill_id}/vessels", response_model=list[Vessel])
-def get_vessels(spill_id: str):
+def get_vessels(
+    spill_id: str = Path(..., description="The unique ID of the spill", example="SP-001")
+):
+    # Indentation fixed here (properly aligned with return)
+    if spill_id != "SP-001":
+        raise HTTPException(
+            status_code=404,
+            detail=f"Spill '{spill_id}' not found"
+        )
+
     return MOCK_VESSELS

@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Path
+from pydantic import BaseModel
 
 router = APIRouter(
     prefix="/api",
@@ -6,14 +8,28 @@ router = APIRouter(
 )
 
 
+class Coordinates(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class TrajectoryPoint(Coordinates):
+    timestamp: datetime
+
+
+class DriftResponse(BaseModel):
+    spill_id: str
+    origin: Coordinates
+    historical_path: list[TrajectoryPoint]
+    predicted_path: list[TrajectoryPoint]
+
+
 MOCK_DRIFT = {
     "spill_id": "SP-001",
-
     "origin": {
         "latitude": 12.320,
         "longitude": 74.540
     },
-
     "historical_path": [
         {
             "latitude": 12.320,
@@ -36,7 +52,6 @@ MOCK_DRIFT = {
             "timestamp": "2026-08-22T11:30:00"
         }
     ],
-
     "predicted_path": [
         {
             "latitude": 12.345,
@@ -57,12 +72,19 @@ MOCK_DRIFT = {
 }
 
 
-@router.get("/spills/{spill_id}/drift")
-def get_drift(spill_id: str):
+@router.get(
+    "/spills/{spill_id}/drift",
+    response_model=DriftResponse,
+    summary="Get drift prediction path for a spill"
+)
+def get_drift(
+    spill_id: str = Path(..., description="The unique ID of the spill", example="SP-001")
+):
+    if spill_id != "SP-001":
+        raise HTTPException(
+            status_code=404,
+            detail=f"Spill '{spill_id}' not found"
+        )
 
-    if spill_id != MOCK_DRIFT["spill_id"]:
-        return {
-            "error": "Drift data not found"
-        }
-
+    # Indentation fixed here
     return MOCK_DRIFT
