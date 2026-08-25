@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Path
 
 from app.schemas.spill import SpillResponse
 from app.core.database import supabase
-
+from fastapi import UploadFile, File
+from app.services.spill_detection_service import detect_spill
 
 router = APIRouter(
     prefix="/api/spills",
@@ -61,3 +62,12 @@ def get_spill(
         polygon=polygon,
         estimated_time=row.get("estimated_time")
     )
+@router.post("/detect")
+async def detect_oil_spill(
+    image: UploadFile = File(...)
+):
+    image_bytes = await image.read()
+
+    result = detect_spill(image_bytes)
+
+    return result
