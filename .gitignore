@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 DARTIS_2019.tab
+dataset/
+runs/
+yolo_dataset/
+yolo_seg_dataset/
+yolo_segmentation/
+*.pt
+*.jpg
