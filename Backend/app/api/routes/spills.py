@@ -1,8 +1,5 @@
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, UploadFile, File
 
-from app.schemas.spill import SpillResponse
-from app.core.database import supabase
-from fastapi import UploadFile, File
 from app.services.spill_detection_service import detect_spill
 
 router = APIRouter(
@@ -11,63 +8,22 @@ router = APIRouter(
 )
 
 
-@router.get("/{spill_id}", response_model=SpillResponse)
-def get_spill(
-    spill_id: str = Path(
-        ...,
-        description="The unique ID of the spill",
-        example="SP-001"
-    )
-):
-    # Query the real Supabase database
-    response = (
-        supabase
-        .table("spills")
-        .select("*")
-        .eq("spill_code", spill_id)
-        .limit(1)
-        .execute()
-    )
+# OLD simple GET /api/spills/{spill_id} was removed.
+# It conflicted with get_spill_details in spill_details.py,
+# which returns the complete spill + drift + attribution + environment payload.
+# The previous handler returned only:
+# spill_id, detected, confidence, area_km2, centroid, polygon, estimated_time
 
-    # Spill doesn't exist
-    if not response.data:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Spill '{spill_id}' not found"
-        )
 
-    row = response.data[0]
-
-    # Database stores GeoJSON coordinates as [longitude, latitude].
-    # Our existing API contract uses [latitude, longitude].
-    polygon = []
-
-    if row.get("polygon"):
-        coordinates = row["polygon"].get("coordinates", [[]])[0]
-
-        polygon = [
-            [point[1], point[0]]
-            for point in coordinates
-        ]
-
-    return SpillResponse(
-        spill_id=row["spill_code"],
-        detected=row["detected"],
-        confidence=row["confidence"],
-        area_km2=row["area_km2"],
-        centroid={
-            "latitude": row["centroid_latitude"],
-            "longitude": row["centroid_longitude"]
-        },
-        polygon=polygon,
-        estimated_time=row.get("estimated_time")
-    )
 @router.post("/detect")
 async def detect_oil_spill(
     image: UploadFile = File(...)
 ):
     image_bytes = await image.read()
 
-    result = detect_spill(image_bytes)
+    result = detect_spill(
+        image_bytes,
+        image.filename
+    )
 
     return result

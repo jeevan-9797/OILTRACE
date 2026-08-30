@@ -14,8 +14,21 @@ MODEL_PATH = (
     / "best.pt"
 )
 
-# Load model once when this module is imported
-model = YOLO(MODEL_PATH)
+_model = None
+
+
+def get_model():
+    """Load the YOLO weights once, on first inference."""
+    global _model
+
+    if _model is None:
+        if not MODEL_PATH.exists():
+            raise FileNotFoundError(
+                f"YOLO model not found: {MODEL_PATH}"
+            )
+        _model = YOLO(str(MODEL_PATH))
+
+    return _model
 
 
 def run_inference(image_path, confidence=0.10):
