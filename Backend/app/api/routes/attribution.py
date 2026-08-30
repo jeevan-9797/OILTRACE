@@ -701,21 +701,11 @@ def calculate_attribution_for_spill(
             },
 
             "weights": {
-
-                "spatial":
-                    0.30,
-
-                "temporal":
-                    0.25,
-
-                "trajectory":
-                    0.30,
-
-                "behaviour":
-                    0.15,
-                "environment":
-                    0.20
-
+                "spatial": 0.25,
+                "temporal": 0.20,
+                "trajectory": 0.25,
+                "behaviour": 0.10,
+                "environment": 0.20,
             },
 
             "drift_points_used":

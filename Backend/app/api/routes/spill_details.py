@@ -1,6 +1,9 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Path
 
 from app.core.database import supabase
+from app.core.timeutil import parse_timestamp
+from app.api.routes.drift import get_nearest_environment
 from app.api.routes.attribution import (
     calculate_attribution_for_spill
 )
@@ -144,6 +147,27 @@ def get_spill_details(
         or []
     )
 
+    # Find closest environmental observation to spill location & time
+    nearest_env = None
+    if spill.get("centroid_latitude") is not None and spill.get("centroid_longitude") is not None:
+        try:
+            spill_time_raw = spill.get("estimated_origin_at") or spill.get("detected_at")
+            if spill_time_raw:
+                spill_time_dt = parse_timestamp(spill_time_raw)
+            else:
+                spill_time_dt = datetime.now(timezone.utc)
+
+            if spill_time_dt is not None:
+                nearest_env = get_nearest_environment(
+                    float(spill["centroid_latitude"]),
+                    float(spill["centroid_longitude"]),
+                    spill_time_dt
+                )
+        except Exception as env_err:
+            print(f"Error finding nearest environment for {spill_id}: {env_err}")
+
+    latest_env = nearest_env if nearest_env is not None else (environment[0] if environment else None)
+
     # =====================================================
     # 5. RETURN COMPLETE RESPONSE
     # =====================================================
@@ -232,10 +256,6 @@ def get_spill_details(
                 environment,
 
             "latest":
-                (
-                    environment[0]
-                    if environment
-                    else None
-                )
+                latest_env
         }
     }

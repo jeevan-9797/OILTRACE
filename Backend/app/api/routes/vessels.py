@@ -72,19 +72,15 @@ def get_vessels(
         mmsi = vessel["mmsi"]
         position = latest_positions.get(mmsi)
 
-        # Skip vessels that don't have a position
-        if not position:
-            continue
-
         result.append(
             Vessel(
                 mmsi=str(mmsi),
-                name=vessel["name"],
-                latitude=position["latitude"],
-                longitude=position["longitude"],
-                speed=position["speed_knots"],
-                heading=position["heading_deg"],
-                timestamp=position["timestamp"]
+                name=vessel.get("name") or "UNKNOWN VESSEL",
+                latitude=float(position["latitude"]) if position and position.get("latitude") is not None else None,
+                longitude=float(position["longitude"]) if position and position.get("longitude") is not None else None,
+                speed=float(position["speed_knots"]) if position and position.get("speed_knots") is not None else None,
+                heading=float(position["heading_deg"]) if position and position.get("heading_deg") is not None else None,
+                timestamp=str(position["timestamp"]) if position and position.get("timestamp") is not None else None
             )
         )
 

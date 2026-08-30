@@ -50,6 +50,8 @@ def run_inference(image_path, confidence=0.10):
 
     height, width = image.shape[:2]
 
+    model = get_model()
+
     results = model.predict(
         source=image,
         conf=confidence,
