@@ -46,27 +46,7 @@ def get_model():
     return _model
 
 
-def warmup():
-    """Warm up PyTorch CPU kernels and predictor graph once during server boot."""
-    model = get_model()
-    dummy = np.zeros((640, 640, 3), dtype=np.uint8)
-    t0 = time.perf_counter()
-    with torch.inference_mode(), torch.no_grad():
-        _ = model.predict(
-            source=dummy,
-            conf=0.25,
-            imgsz=640,
-            device="cpu",
-            verbose=False,
-            save=False,
-            stream=False,
-            max_det=10,
-            retina_masks=False
-        )
-    del dummy, _
-    gc.collect()
-    duration = time.perf_counter() - t0
-    logger.info("[DETECT] YOLO inference kernels warmed up in %.3fs", duration)
+
 
 
 def run_inference(image_path, confidence=0.10):
