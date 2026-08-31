@@ -2,6 +2,7 @@ import os
 import sys
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
+import cv2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -469,3 +470,63 @@ def test_detect_upload_empty_file():
     response = client.post("/api/spills/detect", files=files)
     assert response.status_code == 400
     assert "empty" in response.json()["detail"].lower()
+
+
+@patch("app.services.spill_detection_service.calculate_attribution_for_spill")
+@patch("app.services.spill_detection_service.generate_drift_for_spill")
+@patch("app.services.spill_detection_service.supabase")
+def test_detect_oil_spill_pipeline_success(mock_supabase, mock_drift, mock_attr):
+    """Test full POST /api/spills/detect pipeline with mock database and real inference."""
+    import numpy as np
+
+    # Mock satellite_images lookup
+    mock_sat_table = MagicMock()
+    mock_ai_table = MagicMock()
+    mock_spills_table = MagicMock()
+
+    def table_side_effect(name):
+        if name == "satellite_images":
+            m = MagicMock()
+            m.select.return_value = m
+            m.eq.return_value = m
+            m.limit.return_value = m
+            m.execute.return_value = MagicMock(data=[{"id": "sat-img-uuid-0023"}])
+            return m
+        elif name == "ai_detections":
+            m = MagicMock()
+            m.insert.return_value = m
+            m.execute.return_value = MagicMock(data=[{"id": "ai-det-1"}])
+            return m
+        elif name == "spills":
+            m = MagicMock()
+            m.insert.return_value = m
+            m.execute.return_value = MagicMock(data=[{
+                "id": "spill-uuid-1",
+                "spill_code": "SP-AI-TEST01"
+            }])
+            return m
+        return MagicMock()
+
+    mock_supabase.table.side_effect = table_side_effect
+    mock_drift.return_value = [{"latitude": 35.8, "longitude": 35.4}]
+    mock_attr.return_value = [{"mmsi": "123456789", "final_score": 88.0}]
+
+    # Create a 640x640 dummy image with JPEG bytes
+    dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
+    _, encoded = cv2.imencode(".jpg", dummy_img)
+    img_bytes = encoded.tobytes()
+
+    files = {"image": ("nc-0023-00-000023.jpg", img_bytes, "image/jpeg")}
+    response = client.post("/api/spills/detect", files=files)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["image"] == "nc-0023-00-000023.jpg"
+    assert data["satellite_image_id"] == "sat-img-uuid-0023"
+    assert data["image_width"] == 640
+    assert data["image_height"] == 640
+    assert "detections" in data
+    assert "spills_created" in data
+    assert "drift" in data
+    assert "attribution" in data
+

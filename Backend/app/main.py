@@ -1,3 +1,6 @@
+from contextlib import asynccontextmanager
+import logging
+import sys
 from fastapi import FastAPI
 
 from app.api.routes.spills import router as spills_router
@@ -6,11 +9,32 @@ from app.api.routes.vessels import router as vessels_router
 from app.api.routes.drift import router as drift_router
 from app.api.routes.health import router as health_router
 from app.api.routes import spill_details
+from app.services.ai.inference import get_model
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stdout
+)
+logger = logging.getLogger("oiltrace.main")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pre-warm YOLO model once at application startup
+    try:
+        get_model()
+        logger.info("YOLO model pre-warmed successfully at startup.")
+    except Exception as e:
+        logger.warning("YOLO model pre-warming skipped or deferred: %s", e)
+    yield
+
 
 app = FastAPI(
     title="OILTRACE API",
     description="AI-powered oil spill detection and vessel attribution system",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 

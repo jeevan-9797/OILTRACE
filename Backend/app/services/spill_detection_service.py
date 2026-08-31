@@ -1,3 +1,5 @@
+import gc
+import logging
 import os
 import tempfile
 import uuid
@@ -13,6 +15,8 @@ from app.services.georeferencing.dartis import (
     polygon_pixels_to_geo,
     calculate_polygon_area_km2,
 )
+
+logger = logging.getLogger("oiltrace.detection")
 
 
 def get_or_create_satellite_image(
@@ -417,6 +421,8 @@ def detect_spill(
         # 10. Insert AI detections
         # =====================================================
 
+        logger.info("[DETECT] Supabase operations started")
+
         if ai_rows:
 
             ai_insert_response = (
@@ -458,8 +464,7 @@ def detect_spill(
                     "Failed to save spill records"
                 )
 
-       
-                # =====================================================
+        # =====================================================
         # 12. Generate drift + attribution for each new spill
         # =====================================================
 
@@ -496,6 +501,12 @@ def detect_spill(
                 })
 
             except Exception as drift_error:
+
+                logger.warning(
+                    "[DETECT] drift calculation failed for spill %s: %s",
+                    spill_code,
+                    drift_error
+                )
 
                 drift_results.append({
 
@@ -539,6 +550,12 @@ def detect_spill(
 
             except Exception as attribution_error:
 
+                logger.warning(
+                    "[DETECT] attribution calculation failed for spill %s: %s",
+                    spill_code,
+                    attribution_error
+                )
+
                 attribution_results.append({
 
                     "spill_id":
@@ -550,6 +567,11 @@ def detect_spill(
                     "error":
                         str(attribution_error)
                 })
+
+        logger.info(
+            "[DETECT] Supabase operations completed: %d spill(s) processed",
+            len(inserted_spills)
+        )
 
         # =====================================================
         # 13. Return complete pipeline response
@@ -585,11 +607,16 @@ def detect_spill(
     finally:
 
         # =====================================================
-        # Delete temporary uploaded image
+        # Delete temporary uploaded image and free memory
         # =====================================================
 
         if (
             temp_path
             and os.path.exists(temp_path)
         ):
-            os.remove(temp_path)
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+        gc.collect()
