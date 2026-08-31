@@ -3,7 +3,9 @@ import json
 import logging
 import os
 from pathlib import Path
+import time
 import cv2
+import numpy as np
 import torch
 from ultralytics import YOLO
 
@@ -44,6 +46,29 @@ def get_model():
     return _model
 
 
+def warmup():
+    """Warm up PyTorch CPU kernels and predictor graph once during server boot."""
+    model = get_model()
+    dummy = np.zeros((640, 640, 3), dtype=np.uint8)
+    t0 = time.perf_counter()
+    with torch.inference_mode(), torch.no_grad():
+        _ = model.predict(
+            source=dummy,
+            conf=0.25,
+            imgsz=640,
+            device="cpu",
+            verbose=False,
+            save=False,
+            stream=False,
+            max_det=10,
+            retina_masks=False
+        )
+    del dummy, _
+    gc.collect()
+    duration = time.perf_counter() - t0
+    logger.info("[DETECT] YOLO inference kernels warmed up in %.3fs", duration)
+
+
 def run_inference(image_path, confidence=0.10):
     """
     Run oil-spill segmentation on one image with minimal memory footprint.
@@ -59,17 +84,33 @@ def run_inference(image_path, confidence=0.10):
     model = get_model()
     logger.info("[DETECT] model ready")
 
-    logger.info("[DETECT] inference started (confidence=%s, device=cpu)", confidence)
+    task = getattr(model, "task", "segment")
+    imgsz = 640
+    logger.info(
+        "[DETECT] inference started (confidence=%s, imgsz=%d, task=%s, device=cpu)",
+        confidence,
+        imgsz,
+        task
+    )
+
+    t_start = time.perf_counter()
+    logger.info("[DETECT] calling model.predict")
+
     with torch.inference_mode(), torch.no_grad():
         results = model.predict(
             source=str(image_path),
             conf=confidence,
+            imgsz=imgsz,
             device="cpu",
             verbose=False,
             save=False,
-            stream=False
+            stream=False,
+            max_det=50,
+            retina_masks=False
         )
 
+    t_predict = time.perf_counter() - t_start
+    logger.info("[DETECT] model.predict returned in %.3fs", t_predict)
     logger.info("[DETECT] inference completed")
 
     result = results[0]

@@ -9,7 +9,7 @@ from app.api.routes.vessels import router as vessels_router
 from app.api.routes.drift import router as drift_router
 from app.api.routes.health import router as health_router
 from app.api.routes import spill_details
-from app.services.ai.inference import get_model
+from app.services.ai.inference import get_model, warmup
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,12 +21,13 @@ logger = logging.getLogger("oiltrace.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pre-warm YOLO model once at application startup
+    # Pre-warm YOLO model and PyTorch CPU execution kernels once at startup
     try:
-        get_model()
-        logger.info("YOLO model pre-warmed successfully at startup.")
+        logger.info("[STARTUP] Pre-warming YOLO model and PyTorch kernels...")
+        warmup()
+        logger.info("[STARTUP] YOLO model and inference kernels pre-warmed successfully.")
     except Exception as e:
-        logger.warning("YOLO model pre-warming skipped or deferred: %s", e)
+        logger.warning("[STARTUP] YOLO model pre-warming skipped or deferred: %s", e)
     yield
 
 
