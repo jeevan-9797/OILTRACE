@@ -1,0 +1,7 @@
+path: yolo_seg_dataset
+
+train: images/train
+val: images/val
+
+names:
+  0: oil
