@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 import sys
 from fastapi import FastAPI
-
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.spills import router as spills_router
 from app.api.routes.attribution import router as attribution_router
 from app.api.routes.vessels import router as vessels_router
@@ -53,3 +53,12 @@ app.include_router(drift_router)
 app.include_router(attribution_router)
 app.include_router(health_router)
 app.include_router(spill_details.router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://oil-trace-two.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
