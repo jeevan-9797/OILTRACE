@@ -408,7 +408,7 @@ function UploadZone({ state, progress, onFile, onStateChange, errorMessage }: {
         >
           Try again
         </button>
-        <input ref={fileRef} type="file" accept=".tif,.tiff,.png" style={{ display: "none" }} onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
+        <input ref={fileRef} type="file" accept=".tif,.tiff,image/jpeg,image/png,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
       </div>
     );
   }
@@ -463,9 +463,9 @@ function UploadZone({ state, progress, onFile, onStateChange, errorMessage }: {
         {dragging ? "Release to upload" : "Upload Sentinel-1 Image"}
       </div>
       <div style={{ ...mono, fontSize: 9, color: "var(--color-text-dim)", marginTop: 3 }}>
-        Drag & drop · or click · .tif .tiff .png
+        Drag & drop · or click · .tif .tiff .jpg .jpeg .png
       </div>
-      <input ref={fileRef} type="file" accept=".tif,.tiff,.png" style={{ display: "none" }}
+      <input ref={fileRef} type="file" accept=".tif,.tiff,image/jpeg,image/png,.jpg,.jpeg,.png" style={{ display: "none" }}
         onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
     </div>
   );
