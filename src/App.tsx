@@ -710,7 +710,7 @@ export default function App() {
 
     try {
       const formData = new FormData();
-      formData.append("file", file, file.name);
+      formData.append("image", file, file.name);
 
       // Do not set Content-Type manually: the browser adds the multipart boundary.
       const response = await fetch(`${API_BASE_URL}/api/spills/detect`, {
