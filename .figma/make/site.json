@@ -1,0 +1,10 @@
+{
+  "description": "Provides a mission-control dashboard for satellite-based oil spill investigation with interactive maps, vessel tracking, and detailed attribution evidence.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
