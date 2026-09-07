@@ -1,197 +1,670 @@
-# OILTRACE — Database Layer Documentation & Specification
+Absolutely. Since this is the **final README for the whole OILTRACE project**, I'd make it hackathon-ready rather than just documenting the backend.
 
-> **SIH Internal Hackathon • Marine Oil Spill Detection & Explainable Vessel Attribution**  
-> **Role:** Data / DB Lead  
-> **Target Engine:** PostgreSQL 14+ / Supabase  
+You can create a file named **`README.md` in the repository root** and paste this:
+
+```markdown
+# OILTRACE
+
+## AI-Powered Oil Spill Detection, Tracking & Analysis Platform
+
+OILTRACE is an AI-powered platform designed to detect and analyze oil spills from satellite imagery and provide actionable information for monitoring and response.
+
+The system combines computer vision, geospatial analysis, vessel information, drift prediction, and attribution data into a unified platform.
 
 ---
 
-## 1. Overview & Architecture
+## 🚨 Problem
 
-The **OILTRACE** database is the persistent data layer powering the end-to-end oil spill intelligence pipeline:
-$$\text{Satellite SAR Spill Detection} \longrightarrow \text{Spill Geometry} \longrightarrow \text{Drift Hindcast/Forecast} \longrightarrow \text{AIS Vessel History} \longrightarrow \text{Attribution Scoring} \longrightarrow \text{FastAPI Backend} \longrightarrow \text{Frontend Dashboard}$$
+Oil spills can cause severe environmental and economic damage. Detecting spills quickly and understanding their location, movement, and possible source is critical for effective response.
 
-```mermaid
-erDiagram
-    satellite_images ||--o{ spills : "detects (1:N)"
-    spills ||--o{ spill_drift_points : "generates (1:N)"
-    spills ||--o{ attribution_scores : "evaluates (1:N)"
-    vessels ||--o{ attribution_scores : "scored_in (1:N)"
-    vessels ||--o{ vessel_positions : "broadcasts (1:N)"
-    weather_ocean_data ||--o{ spill_drift_points : "drives drift"
+Traditional monitoring methods can be:
 
-    satellite_images {
-        uuid id PK
-        text provider
-        text satellite
-        text sensor
-        timestamptz acquired_at
-        float latitude
-        float longitude
-        text image_url
-        text local_path
-        jsonb metadata
-    }
+- Time-consuming
+- Dependent on manual image analysis
+- Difficult to scale
+- Slow to identify potential sources
+- Limited in providing rapid geospatial insights
 
-    spills {
-        uuid id PK
-        text spill_code UK
-        boolean detected
-        numeric confidence
-        float area_km2
-        float centroid_latitude
-        float centroid_longitude
-        jsonb polygon
-        timestamptz detected_at
-        timestamptz estimated_origin_at
-        float estimated_age_hours
-        text status
-        uuid source_image_id FK
-    }
+OILTRACE aims to automate the initial detection and analysis process using AI and geospatial data.
 
-    vessels {
-        bigint mmsi PK
-        text name
-        text imo_number
-        text vessel_type
-        text flag
-        float length_m
-        float width_m
-        timestamptz created_at
-        timestamptz updated_at
-    }
+---
 
-    vessel_positions {
-        bigint id PK
-        bigint mmsi FK
-        timestamptz timestamp
-        float latitude
-        float longitude
-        float speed_knots
-        float heading_deg
-        float course_deg
-        text navigation_status
-        text source
-    }
+## 💡 Solution
 
-    spill_drift_points {
-        bigint id PK
-        uuid spill_id FK
-        int sequence_no
-        float latitude
-        float longitude
-        timestamptz timestamp
-        text path_type
-        text model_source
-        numeric confidence
-    }
+OILTRACE processes satellite imagery using a trained YOLO segmentation model to identify potential oil spills.
 
-    attribution_scores {
-        bigint id PK
-        uuid spill_id FK
-        bigint mmsi FK
-        numeric spatial_score
-        numeric temporal_score
-        numeric trajectory_score
-        numeric behaviour_score
-        numeric environment_score
-        numeric final_score
-        int rank
-        jsonb evidence
-        text model_version
-    }
+After detection, the backend processes the detected spill and provides:
 
-    weather_ocean_data {
-        bigint id PK
-        timestamptz timestamp
-        float latitude
-        float longitude
-        float wind_speed
-        float wind_direction
-        float current_speed
-        float current_direction
-        text source
-        jsonb metadata
-    }
+- Spill detection information
+- Spill location
+- Detection confidence
+- Bounding boxes
+- Centroids
+- Spill polygons
+- Estimated spill area
+- Vessel information
+- Drift prediction
+- Source attribution
+- Supporting geospatial information
+
+The frontend consumes the backend APIs and presents the results through the application interface.
+
+---
+
+# ✨ Key Features
+
+### 🛰️ AI-Based Oil Spill Detection
+
+Uses a trained YOLO segmentation model to detect oil spill regions in satellite imagery.
+
+### 🎯 Spill Segmentation
+
+The AI model provides segmentation information for detected spill regions rather than relying only on rectangular bounding boxes.
+
+### 📍 Geospatial Information
+
+Detected spill coordinates and polygon information are processed to provide geographic context.
+
+### 🚢 Vessel Analysis
+
+The system provides vessel information associated with a spill location and time.
+
+### 🌊 Drift Prediction
+
+The platform generates a predicted drift path for detected spills.
+
+### 🔎 Source Attribution
+
+The system calculates attribution information and candidate vessel/source scores for detected spills.
+
+### ☁️ Cloud Backend
+
+The FastAPI backend is deployed on Render and can be accessed remotely by the frontend.
+
+### 🗄️ Supabase Integration
+
+Supabase is used for storing and retrieving application data associated with spills, vessels, drift paths, attribution results, and related information.
+
+### 📖 Interactive API Documentation
+
+The backend provides automatically generated Swagger documentation through FastAPI.
+
+---
+
+# 🏗️ System Architecture
+
+```text
+                    ┌──────────────────────┐
+                    │      User / UI       │
+                    │      Frontend        │
+                    └──────────┬───────────┘
+                               │
+                               │ HTTP / REST API
+                               ▼
+                    ┌──────────────────────┐
+                    │     FastAPI Backend  │
+                    │      OILTRACE API    │
+                    └──────────┬───────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+       ┌─────────────┐  ┌─────────────┐  ┌──────────────┐
+       │ YOLO Model  │  │  Supabase   │  │ Geospatial  │
+       │ Detection   │  │  Database   │  │ Processing  │
+       └──────┬──────┘  └─────────────┘  └──────┬───────┘
+              │                                  │
+              ▼                                  ▼
+       Spill Detection                    Drift / Vessel /
+       & Segmentation                     Attribution Data
+              │
+              └────────────────┬─────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │    API Response     │
+                    │ Detection + Analysis │
+                    └──────────────────────┘
 ```
 
 ---
 
-## 2. File Directory
+# 🔄 Detection Workflow
 
-| File | Description |
-| :--- | :--- |
-| [`01_schema.sql`](file:///e:/Database/01_schema.sql) | DDL script defining all tables, constraints, indexes, triggers, and Supabase RLS policies. |
-| [`02_seed_data.sql`](file:///e:/Database/02_seed_data.sql) | Realistic demo dataset for `SP-001`, candidate vessels (`VESSEL ALPHA`, `BRAVO`, `CHARLIE`), historical AIS tracks, drift points, and explainable AI attribution evidence. |
-| [`03_verify_queries.sql`](file:///e:/Database/03_verify_queries.sql) | SQL test suite validating all Backend API endpoints, foreign keys, and data integrity constraints. |
-| [`all_in_one_setup.sql`](file:///e:/Database/all_in_one_setup.sql) | Single-click SQL script for pasting into the Supabase SQL Editor. |
-| [`BACKEND_HANDOFF.md`](file:///e:/Database/BACKEND_HANDOFF.md) | Official DB Lead hand-off document for the Backend Lead, containing field dictionaries and API integration guides. |
-| [`.env.example`](file:///e:/Database/.env.example) | Environment variable template for database connectivity. |
-| [`test_data_integrity.py`](file:///e:/Database/test_data_integrity.py) | Automated validation script testing SQL syntax, JSONB schema, and demo entities. |
-
----
-
-## 3. Tables & Specifications
-
-### Table: `spills` (MUST)
-- **Primary Key:** `id` (`UUID DEFAULT gen_random_uuid()`)
-- **Key Columns:**
-  - `spill_code` (`TEXT UNIQUE`): Human-readable ID (e.g. `'SP-001'`).
-  - `detected` (`BOOLEAN NOT NULL DEFAULT true`): Detection active flag.
-  - `confidence` (`NUMERIC(5,4)`): Confidence score between `0.0` and `1.0`.
-  - `area_km2` (`DOUBLE PRECISION`): Slick area in km².
-  - `centroid_latitude`, `centroid_longitude` (`DOUBLE PRECISION`): Bounded coordinates.
-  - `polygon` (`JSONB`): GeoJSON `Polygon` / `MultiPolygon` format for mapping rendering.
-  - `detected_at` (`TIMESTAMPTZ`): Satellite observation time in UTC.
-  - `estimated_origin_at` (`TIMESTAMPTZ`): Hindcast estimated discharge timestamp.
-  - `status` (`TEXT`): `'detected'`, `'investigating'`, `'resolved'`, `'closed'`.
-  - `source_image_id` (`UUID FK` $\rightarrow$ `satellite_images.id`).
-
-### Table: `vessels` (MUST)
-- **Primary Key:** `mmsi` (`BIGINT`): 9-digit AIS Maritime Mobile Service Identity.
-- **Key Columns:** `name`, `imo_number`, `vessel_type`, `flag`, `length_m`, `width_m`, `created_at`, `updated_at`.
-- **Trigger:** Automatic `updated_at` modification on update.
-
-### Table: `vessel_positions` (MUST)
-- **Primary Key:** `id` (`BIGINT GENERATED ALWAYS AS IDENTITY`).
-- **Key Columns:** `mmsi` (`BIGINT FK` $\rightarrow$ `vessels.mmsi ON DELETE CASCADE`), `timestamp` (`TIMESTAMPTZ`), `latitude`, `longitude`, `speed_knots`, `heading_deg`, `course_deg`, `navigation_status`, `source` (`'sample_ais'`, `'real_ais'`, `'mock'`).
-- **Indexes:** Indexed on `(mmsi)`, `(timestamp)`, `(mmsi, timestamp DESC)`, `(latitude, longitude)`.
-
-### Table: `spill_drift_points` (MUST)
-- **Primary Key:** `id` (`BIGINT GENERATED ALWAYS AS IDENTITY`).
-- **Key Columns:** `spill_id` (`UUID FK` $\rightarrow$ `spills.id ON DELETE CASCADE`), `sequence_no` (`INTEGER`), `latitude`, `longitude`, `timestamp` (`TIMESTAMPTZ`), `path_type` (`'origin'`, `'historical'`, `'predicted'`), `model_source`, `confidence`.
-
-### Table: `attribution_scores` (MUST)
-- **Primary Key:** `id` (`BIGINT GENERATED ALWAYS AS IDENTITY`).
-- **Key Columns:** `spill_id` (`UUID FK`), `mmsi` (`BIGINT FK`), `spatial_score`, `temporal_score`, `trajectory_score`, `behaviour_score`, `environment_score`, `final_score` (`NUMERIC(5,2)` $\in [0, 100]$), `rank` (`INTEGER`), `evidence` (`JSONB`), `model_version` (`TEXT`).
-- **Constraint:** Unique `(spill_id, mmsi)`.
-
-### Table: `satellite_images` (SHOULD)
-- **Primary Key:** `id` (`UUID DEFAULT gen_random_uuid()`).
-- **Key Columns:** `provider`, `satellite` (e.g. `'Sentinel-1A'`), `sensor` (e.g. `'SAR'`), `acquired_at` (`TIMESTAMPTZ`), `latitude`, `longitude`, `image_url`, `local_path`, `metadata` (`JSONB`).
-
-### Table: `weather_ocean_data` (SHOULD)
-- **Primary Key:** `id` (`BIGINT GENERATED ALWAYS AS IDENTITY`).
-- **Key Columns:** `timestamp` (`TIMESTAMPTZ`), `latitude`, `longitude`, `wind_speed`, `wind_direction`, `current_speed`, `current_direction`, `source`, `metadata` (`JSONB`).
+```text
+Satellite Image
+      │
+      ▼
+Image Upload
+      │
+      ▼
+FastAPI Detection Endpoint
+      │
+      ▼
+YOLO Segmentation Model
+      │
+      ▼
+Oil Spill Detection
+      │
+      ├── Bounding Box
+      ├── Centroid
+      ├── Polygon
+      ├── Confidence
+      └── Estimated Area
+      │
+      ▼
+Supabase Processing
+      │
+      ├── Spill Data
+      ├── Vessel Data
+      ├── Drift Data
+      └── Attribution Data
+      │
+      ▼
+Final API Response
+      │
+      ▼
+Frontend Visualization
+```
 
 ---
 
-## 4. Setup Guide for Supabase
+# 🧠 AI / ML
 
-1. Open your [Supabase Dashboard](https://supabase.com/dashboard) and create a new project (e.g. `oiltrace-db`).
-2. Navigate to the **SQL Editor** tab from the left sidebar.
-3. Open [`all_in_one_setup.sql`](file:///e:/Database/all_in_one_setup.sql), copy the entire SQL script, paste it into the editor, and click **Run**.
-4. To verify the setup, paste the queries from [`03_verify_queries.sql`](file:///e:/Database/03_verify_queries.sql) and run them.
-5. In **Project Settings** $\rightarrow$ **Database**, copy the Connection URI and add it to your FastAPI `.env` file as `DATABASE_URL`.
+OILTRACE uses a YOLO segmentation model trained for oil spill detection.
+
+### Model
+
+- Architecture: YOLOv8n-seg
+- Task: Image segmentation
+- Input resolution: 640 × 640
+- Inference device: CPU
+- Model weights: `best.pt`
+
+The model is integrated into the FastAPI backend for remote inference.
+
+### Inference Optimization
+
+The deployed backend uses CPU-oriented optimizations including:
+
+- Single PyTorch thread
+- CPU inference
+- Inference mode / disabled gradients
+- Controlled image resolution
+- Limited maximum detections
+- Reduced mask memory usage
+- Model initialization during application startup
+
+These optimizations were implemented to allow inference within the memory constraints of the Render deployment environment.
 
 ---
 
-## 5. Deliverables Checklist & Definition of Done
+# 🔌 API
 
-- [x] **Supabase / PostgreSQL SQL Schema** created with full DDL ([`01_schema.sql`](file:///e:/Database/01_schema.sql))
-- [x] **Primary Keys, Foreign Keys, & Constraints** configured (`ON DELETE CASCADE`, coordinate bounds, score bounds $[0, 100]$, confidence $[0, 1]$)
-- [x] **High-Performance Indexes** created for AIS trajectory queries, spill codes, and ranking searches
-- [x] **Realistic Demo Dataset** inserted for `SP-001`, `VESSEL ALPHA` (top suspect), `VESSEL BRAVO`, `VESSEL CHARLIE`, drift hindcasts/forecasts, and explainable JSONB evidence ([`02_seed_data.sql`](file:///e:/Database/02_seed_data.sql))
-- [x] **Backend API Verification Query Suite** created and verified ([`03_verify_queries.sql`](file:///e:/Database/03_verify_queries.sql))
-- [x] **Backend Hand-off Documentation** prepared ([`BACKEND_HANDOFF.md`](file:///e:/Database/BACKEND_HANDOFF.md))
-- [x] **Environment Variables Template** provided without exposing secrets ([`.env.example`](file:///e:/Database/.env.example))
+## Base URL
+
+```text
+https://oil-trace.onrender.com
+```
+
+## Swagger Documentation
+
+```text
+https://oil-trace.onrender.com/docs
+```
+
+The Swagger interface can be used to test the API directly from a browser.
+
+---
+
+## Available Endpoints
+
+### Health
+
+```http
+GET /api/health
+```
+
+Checks the health/status of the backend.
+
+---
+
+### Oil Spill Detection
+
+```http
+POST /api/spills/detect
+```
+
+Uploads an image and performs AI-based oil spill detection.
+
+The response can contain information including:
+
+- Image name
+- Satellite image ID
+- Image dimensions
+- Detected spills
+- Confidence scores
+- Bounding boxes
+- Centroids
+- Polygon coordinates
+- Spill areas
+- Drift information
+- Attribution information
+
+---
+
+### Vessel Information
+
+```http
+GET /api/spills/{spill_id}/vessels
+```
+
+Retrieves vessel information associated with a spill.
+
+---
+
+### Drift Prediction
+
+```http
+GET /api/spills/{spill_id}/drift
+```
+
+Retrieves the predicted drift path for a spill.
+
+---
+
+### Attribution
+
+```http
+GET /api/spills/{spill_id}/attribution
+```
+
+Retrieves attribution scores and candidate source information for a spill.
+
+---
+
+### Spill Details
+
+```http
+GET /api/spills/{spill_id}
+```
+
+Retrieves complete information associated with a specific spill.
+
+---
+
+# 🛠️ Technology Stack
+
+## Backend
+
+- Python
+- FastAPI
+- Uvicorn
+- Pydantic
+
+## AI / Machine Learning
+
+- PyTorch
+- Ultralytics YOLO
+- YOLOv8n-seg
+- OpenCV
+- NumPy
+
+## Database / Backend Services
+
+- Supabase
+
+## Deployment
+
+- Render
+
+## API Documentation
+
+- Swagger UI
+- OpenAPI
+
+---
+
+# 📁 Project Structure
+
+```text
+SIH2026-INNOVATORS/
+│
+├── Backend/
+│   │
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── routes/
+│   │   │       ├── spills.py
+│   │   │       ├── vessels.py
+│   │   │       ├── drift.py
+│   │   │       ├── attribution.py
+│   │   │       ├── health.py
+│   │   │       └── spill_details.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── ai/
+│   │   │   └── ...
+│   │   │
+│   │   └── main.py
+│   │
+│   ├── data/
+│   ├── runs/
+│   ├── tests/
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── API_CONTRACT.md
+│
+├── Frontend/
+│   └── ...
+│
+├── AI-ML/
+│   └── ...
+│
+└── README.md
+```
+
+> The exact frontend and AI/ML directory structure can be updated as those components are finalized.
+
+---
+
+# ⚙️ Backend Setup
+
+## 1. Clone the repository
+
+```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd SIH2026-INNOVATORS
+```
+
+---
+
+## 2. Navigate to the backend
+
+```bash
+cd Backend
+```
+
+---
+
+## 3. Create a virtual environment
+
+### Windows PowerShell
+
+```powershell
+python -m venv venv
+```
+
+Activate it:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+### Linux / macOS
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+---
+
+## 4. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 5. Configure environment variables
+
+Create a `.env` file based on `.env.example`.
+
+Example:
+
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+```
+
+Do **not** commit `.env` or any private credentials to GitHub.
+
+---
+
+## 6. Run the backend
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The API will normally be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
+# 🚀 Deployment
+
+The OILTRACE backend is deployed on Render.
+
+### Production API
+
+```text
+https://oil-trace.onrender.com
+```
+
+### Start Command
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+```
+
+The backend uses a single Uvicorn worker because the AI model is memory-intensive and multiple workers would duplicate the model in memory.
+
+### Render Memory Optimization
+
+The deployment uses CPU-only machine learning dependencies and headless OpenCV to reduce unnecessary memory usage on the server.
+
+The YOLO model is also initialized during application startup.
+
+> The free Render instance may spin down after inactivity. As a result, the first request after a period of inactivity can take significantly longer than subsequent requests.
+
+---
+
+# 🧪 Testing
+
+The backend includes automated API tests.
+
+Run:
+
+```bash
+pytest
+```
+
+The detection pipeline should also be tested using a valid satellite image through:
+
+```text
+POST /api/spills/detect
+```
+
+A successful detection request should return:
+
+```text
+HTTP 200 OK
+```
+
+and provide detection and analysis information in the response.
+
+---
+
+# 🔐 Security
+
+Never commit sensitive credentials.
+
+The following types of files should remain local:
+
+```text
+.env
+.env.local
+*.pem
+*.key
+```
+
+Use environment variables for production credentials and API keys.
+
+---
+
+# 📊 Example Detection Result
+
+A successful detection response contains information similar to:
+
+```json
+{
+  "image": "example.jpg",
+  "satellite_image_id": "example-id",
+  "image_width": 640,
+  "image_height": 640,
+  "detections": [
+    {
+      "spill_code": "SP-AI-XXXX",
+      "confidence": 0.92,
+      "bbox": [100, 120, 300, 350],
+      "centroid_pixels": [200, 235],
+      "centroid": [35.91, 35.41],
+      "area_pixels": 8704,
+      "area_km2": 3.44,
+      "polygon_pixels": []
+    }
+  ]
+}
+```
+
+> The exact values depend on the image submitted to the detection endpoint.
+
+---
+
+# 🌍 Intended Impact
+
+OILTRACE aims to help improve the speed and efficiency of oil spill monitoring by combining automated image analysis with geospatial and vessel information.
+
+Potential benefits include:
+
+- Faster spill identification
+- Reduced dependence on manual image inspection
+- Improved situational awareness
+- Faster access to spill location information
+- Support for identifying potential sources
+- Better understanding of spill movement
+
+---
+
+# 🏆 Hackathon Project
+
+OILTRACE was developed as a collaborative project for the Smart India Hackathon.
+
+The project brings together:
+
+- AI / Machine Learning
+- Backend Engineering
+- Frontend Development
+- Database Integration
+- Geospatial Processing
+- UI/UX Design
+
+The architecture is designed so that individual components can be developed independently while communicating through well-defined APIs.
+
+---
+
+# 👥 Team
+
+**Project:** OILTRACE
+
+**Team:** SIH2026-INNOVATORS
+
+Team members and individual responsibilities can be added here:
+
+| Member | Role |
+|---|---|
+| Member 1 | Backend |
+| Member 2 | AI / ML |
+| Member 3 | Frontend |
+| Member 4 | UI/UX |
+| Member 5 | Integration |
+| Member 6 | Testing / Documentation |
+
+---
+
+# 📌 Current Status
+
+### Backend
+
+- [x] FastAPI implementation
+- [x] REST APIs
+- [x] YOLO oil spill detection
+- [x] Segmentation processing
+- [x] Supabase integration
+- [x] Vessel API
+- [x] Drift API
+- [x] Attribution API
+- [x] Health API
+- [x] Swagger documentation
+- [x] Render deployment
+- [x] Production detection test
+
+### Frontend
+
+- [x] Backend integration
+- [ ] Final end-to-end testing
+- [ ] Final UI/UX polish
+
+### AI / ML
+
+- [x] Dataset preparation
+- [x] YOLO segmentation model
+- [x] Backend inference integration
+- [x] Production inference testing
+
+---
+
+# 🔮 Future Improvements
+
+Potential future improvements include:
+
+- Improved model accuracy with additional training data
+- More efficient large-scale inference
+- Improved drift prediction
+- Advanced vessel-source correlation
+- Real-time monitoring
+- Alert and notification systems
+- More detailed geospatial visualization
+- Production-scale infrastructure
+
+---
+
+# 📜 License
+
+Add the project's chosen license here.
+
+---
+
+## OILTRACE
+
+**Detect. Analyze. Track. Respond.**
+```
+
+### One thing I'd change before you commit
+
+Don't leave the README's **team names, frontend structure, or license** as fake information. Replace those placeholders with your actual details.
+
+And **don't put your Supabase URL/key, Gemini API key, or any other secret in the README**.
+
+For the hackathon, this README is enough to make the repository look like a **complete project rather than just a collection of backend/AI files**.
