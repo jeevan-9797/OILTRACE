@@ -48,74 +48,76 @@ def get_or_create_satellite_image(
     # Create satellite_images record
     # ---------------------------------------------------------
 
-    # Currently confirmed DARTIS test image
-    if image_name == "nc-0023-00-000023.jpg":
+    # Calculate approximate geographic center from the DARTIS corners.
+    latitude = (
+        metadata["ul"][1]
+        + metadata["ur"][1]
+        + metadata["br"][1]
+        + metadata["bl"][1]
+    ) / 4
 
-        acquired_at = "2019-04-13T03:42:57+00:00"
+    longitude = (
+        metadata["ul"][0]
+        + metadata["ur"][0]
+        + metadata["br"][0]
+        + metadata["bl"][0]
+    ) / 4
 
-        # Calculate approximate geographic center
-        latitude = (
-            metadata["ul"][1]
-            + metadata["ur"][1]
-            + metadata["br"][1]
-            + metadata["bl"][1]
-        ) / 4
+    new_image = {
+        "provider": "DARTIS / Copernicus / ESA",
+        "satellite": "Sentinel-1A",
+        "sensor": "SAR (C-Band Synthetic Aperture Radar)",
+        "acquired_at": "2019-04-13T03:42:57+00:00",
+        "latitude": latitude,
+        "longitude": longitude,
+        "image_url": None,
+        "local_path": image_name,
+        "metadata": {
+            "dataset": "DARTIS",
+            "source_product": (
+                "S1A_IW_GRDH_1SDV_20190413T034257_"
+                "20190413T034322_026766_0301B4_A807.SAFE"
+            ),
+            "image_width": metadata["width"],
+            "image_height": metadata["height"],
+            "ul": metadata["ul"],
+            "ur": metadata["ur"],
+            "br": metadata["br"],
+            "bl": metadata["bl"],
+        },
+    }
 
-        longitude = (
-            metadata["ul"][0]
-            + metadata["ur"][0]
-            + metadata["br"][0]
-            + metadata["bl"][0]
-        ) / 4
-
-        new_image = {
-            "provider": "DARTIS / Copernicus / ESA",
-            "satellite": "Sentinel-1A",
-            "sensor": "SAR (C-Band Synthetic Aperture Radar)",
-            "acquired_at": acquired_at,
-            "latitude": latitude,
-            "longitude": longitude,
-            "image_url": None,
-            "local_path": image_name,
-
-            "metadata": {
-                "dataset": "DARTIS",
-                "source_product": (
-                    "S1A_IW_GRDH_1SDV_20190413T034257_"
-                    "20190413T034322_026766_0301B4_A807.SAFE"
-                ),
-
-                "image_width": metadata["width"],
-                "image_height": metadata["height"],
-
-                "ul": metadata["ul"],
-                "ur": metadata["ur"],
-                "br": metadata["br"],
-                "bl": metadata["bl"],
-            },
-        }
-
+    try:
         inserted = (
             supabase
             .table("satellite_images")
             .insert(new_image)
             .execute()
         )
+    except Exception as create_error:
+        # A concurrent request may have created the same local_path between
+        # the initial lookup and insert. Reuse that record when possible.
+        existing = (
+            supabase
+            .table("satellite_images")
+            .select("id")
+            .eq("local_path", image_name)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return existing.data[0]["id"]
+        raise RuntimeError(
+            f"Failed to create satellite_images record for {image_name}: {create_error}"
+        ) from create_error
 
-        if not inserted.data:
-            raise RuntimeError(
-                "Failed to create satellite_images record"
-            )
+    if not inserted.data:
+        raise RuntimeError(
+            f"Failed to create satellite_images record for {image_name}: "
+            "the database returned no inserted record"
+        )
 
-        return inserted.data[0]["id"]
-
-    # ---------------------------------------------------------
-    # If image is not yet supported
-    # ---------------------------------------------------------
-
-    raise ValueError(
-        f"No satellite image metadata available for: {image_name}"
-    )
+    return inserted.data[0]["id"]
 
 
 def detect_spill(
