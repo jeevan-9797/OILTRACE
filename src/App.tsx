@@ -151,7 +151,17 @@ const normalizeVessel = (raw: unknown, index: number): Vessel => {
 
 const normalizeSpill = (root: unknown, spillId = ""): SpillData => {
   const obj = toRecord(root);
-  const spill = toRecord(firstDefined(obj.spill, obj.spill_details, obj.spillDetails, obj.detection, obj.data, root));
+  const detections = Array.isArray(obj.detections) ? obj.detections : [];
+  const firstDetection = detections.length > 0 ? detections[0] : undefined;
+  const spill = toRecord(firstDefined(
+    obj.spill,
+    obj.spill_details,
+    obj.spillDetails,
+    obj.detection,
+    firstDetection,
+    obj.data,
+    root,
+  ));
   const confidence = firstDefined(
     spill.confidence, spill.confidence_score, spill.confidenceScore,
     spill.detection_confidence, spill.detectionConfidence, obj.confidence
@@ -170,7 +180,14 @@ const normalizeSpill = (root: unknown, spillId = ""): SpillData => {
 
   return {
     spillId: asString(firstDefined(
-      obj.spill_id, obj.spillId, spill.spill_id, spill.spillId, spill.id, spillId
+      obj.spill_id,
+      obj.spillId,
+      spill.spill_id,
+      spill.spillId,
+      spill.spill_code,
+      spill.spillCode,
+      spill.id,
+      spillId,
     ), spillId),
     confidence: confidence === undefined ? null : asPercent(confidence),
     area: formatValue(area, typeof area === "number" ? " km²" : ""),
