@@ -65,7 +65,7 @@ def run_inference(image_path, confidence=0.10):
     logger.info("[DETECT] model ready")
 
     task = getattr(model, "task", "segment")
-    imgsz = 640
+    imgsz = 512
     logger.info(
         "[DETECT] inference started (confidence=%s, imgsz=%d, task=%s, device=cpu)",
         confidence,
