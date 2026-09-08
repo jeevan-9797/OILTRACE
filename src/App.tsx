@@ -161,6 +161,18 @@ const normalizeVessel = (raw: unknown, index: number): Vessel => {
   };
 };
 
+const deduplicateVessels = (vessels: Vessel[]): Vessel[] => {
+  const byMmsi = new Map<string, Vessel>();
+  vessels.forEach(vessel => {
+    const key = vessel.mmsi !== "—" ? vessel.mmsi : vessel.id;
+    const existing = byMmsi.get(key);
+    if (!existing || vessel.score > existing.score) {
+      byMmsi.set(key, vessel);
+    }
+  });
+  return Array.from(byMmsi.values());
+};
+
 const normalizeSpill = (root: unknown, spillId = ""): SpillData => {
   const obj = toRecord(root);
   const detections = Array.isArray(obj.detections) ? obj.detections : [];
@@ -203,7 +215,9 @@ const normalizeSpill = (root: unknown, spillId = ""): SpillData => {
     ), spillId),
     confidence: confidence === undefined ? null : asPercent(confidence),
     area: formatValue(area, typeof area === "number" ? " km²" : ""),
-    centroid: typeof centroidValue === "object" && centroidValue !== null
+    centroid: Array.isArray(centroidValue) && centroidValue.length >= 2
+      ? `${asString(centroidValue[0])}°, ${asString(centroidValue[1])}°`
+      : typeof centroidValue === "object" && centroidValue !== null
       ? (() => {
           const c = toRecord(centroidValue);
           return `${asString(firstDefined(c.lat, c.latitude))}, ${asString(firstDefined(c.lon, c.lng, c.longitude))}`;
@@ -243,7 +257,7 @@ const normalizeTimeline = (root: unknown, spill: SpillData): TimelineEvent[] => 
 
 const normalizeDetection = (root: unknown, spillId = ""): DetectionData => {
   const spill = normalizeSpill(root, spillId);
-  const vessels = extractVesselArray(root).map(normalizeVessel);
+  const vessels = deduplicateVessels(extractVesselArray(root).map(normalizeVessel));
   const evidenceByVessel: Record<string, EvidenceData> = {};
   const obj = toRecord(root);
   const evidenceList = extractAttributionCandidates(root).length
@@ -256,18 +270,21 @@ const normalizeDetection = (root: unknown, spillId = ""): DetectionData => {
   evidenceList.forEach((item, index) => {
     const e = toRecord(item);
     const vessel = normalizeVessel(firstDefined(e.vessel, e), index);
-    evidenceByVessel[vessel.id] = {
-      vessel,
-      evidence: [
-        ["spatial", "Spatial proximity"],
-        ["temporal", "Temporal correlation"],
-        ["trajectory", "Trajectory match"],
-        ["behaviour", "Behaviour"],
-      ].map(([key, label]) => ({
-        label,
-        value: formatValue(firstDefined(e[key], e[`${key}_score`], e[`${key}Score`], e[key === "behaviour" ? "behavior" : key]))
-      })),
-    };
+    const existingEvidence = evidenceByVessel[vessel.id];
+    if (!existingEvidence || vessel.score > existingEvidence.vessel.score) {
+      evidenceByVessel[vessel.id] = {
+        vessel,
+        evidence: [
+          ["spatial", "Spatial proximity"],
+          ["temporal", "Temporal correlation"],
+          ["trajectory", "Trajectory match"],
+          ["behaviour", "Behaviour"],
+        ].map(([key, label]) => ({
+          label,
+          value: formatValue(firstDefined(e[key], e[`${key}_score`], e[`${key}Score`], e[key === "behaviour" ? "behavior" : key]))
+        })),
+      };
+    }
   });
 
   return {
