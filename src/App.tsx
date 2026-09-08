@@ -107,12 +107,24 @@ const arrayFrom = (value: unknown): unknown[] => {
   return Array.isArray(candidate) ? candidate : [];
 };
 
+const extractAttributionCandidates = (root: unknown): unknown[] => {
+  const obj = toRecord(root);
+  const directCandidates = arrayFrom(firstDefined(obj.candidates, pickNested(root, ["data", "candidates"])));
+  const attributionEntries = arrayFrom(obj.attribution);
+  const wrappedCandidates = attributionEntries.flatMap(entry => {
+    const record = toRecord(entry);
+    return arrayFrom(firstDefined(record.candidates, record.data, record.results));
+  });
+  return wrappedCandidates.length ? wrappedCandidates : directCandidates;
+};
+
 const extractVesselArray = (root: unknown): unknown[] => {
   const obj = toRecord(root);
   const candidates = [
     obj.vessels,
     obj.suspect_vessels,
     obj.suspectVessels,
+    extractAttributionCandidates(root),
     pickNested(root, ["data", "vessels"]),
     pickNested(root, ["data", "suspect_vessels"]),
     pickNested(root, ["data", "suspectVessels"]),
@@ -234,10 +246,12 @@ const normalizeDetection = (root: unknown, spillId = ""): DetectionData => {
   const vessels = extractVesselArray(root).map(normalizeVessel);
   const evidenceByVessel: Record<string, EvidenceData> = {};
   const obj = toRecord(root);
-  const evidenceList = arrayFrom(firstDefined(
-    obj.attribution, obj.attribution_evidence, obj.attributionEvidence, obj.evidence,
+  const evidenceList = extractAttributionCandidates(root).length
+    ? extractAttributionCandidates(root)
+    : arrayFrom(firstDefined(
+      obj.attribution_evidence, obj.attributionEvidence, obj.evidence,
     pickNested(root, ["data", "attribution"]), pickNested(root, ["data", "evidence"])
-  ));
+    ));
 
   evidenceList.forEach((item, index) => {
     const e = toRecord(item);
@@ -297,6 +311,7 @@ async function enrichDetection(data: DetectionData): Promise<DetectionData> {
   // The detection response may already contain all panels. If it only returns a spill_id,
   // try the most common REST resource shapes without making the UI dependent on one exact schema.
   const candidates = [
+    `/api/spills/${encodeURIComponent(data.spill.spillId)}/attribution`,
     `/api/spills/${encodeURIComponent(data.spill.spillId)}`,
     `/api/spills/${encodeURIComponent(data.spill.spillId)}/details`,
   ];
