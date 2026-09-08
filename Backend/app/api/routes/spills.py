@@ -1,4 +1,5 @@
 import logging
+import time
 import traceback
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
@@ -44,10 +45,15 @@ async def detect_oil_spill(
         )
 
     try:
+        image_read_started = time.perf_counter()
         image_bytes = await image.read()
         logger.info(
             "[DETECT] image received (%d bytes)",
             len(image_bytes) if image_bytes else 0
+        )
+        logger.info(
+            "[TIMING] image read: %.3fs",
+            time.perf_counter() - image_read_started,
         )
     except Exception as read_err:
         logger.error(
@@ -68,6 +74,7 @@ async def detect_oil_spill(
         )
 
     try:
+        pipeline_started = time.perf_counter()
         result = detect_spill(
             image_bytes,
             image.filename
@@ -77,6 +84,10 @@ async def detect_oil_spill(
             len(result.get("detections", [])),
             result.get("spills_created", 0),
             image.filename
+        )
+        logger.info(
+            "[TIMING] detection endpoint: %.3fs",
+            time.perf_counter() - pipeline_started,
         )
         return result
     except ValueError as e:

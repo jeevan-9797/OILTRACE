@@ -2,6 +2,7 @@ import gc
 import logging
 import os
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -149,6 +150,14 @@ def detect_spill(
     """
 
     temp_path = None
+    pipeline_started = time.perf_counter()
+
+    def log_stage(stage: str, started: float):
+        logger.info(
+            "[TIMING] %s: %.3fs",
+            stage,
+            time.perf_counter() - started,
+        )
 
     try:
 
@@ -156,9 +165,11 @@ def detect_spill(
         # 1. Get DARTIS geospatial metadata
         # =====================================================
 
+        stage_started = time.perf_counter()
         metadata = get_image_metadata(
             image_name
         )
+        log_stage("metadata lookup", stage_started)
 
         width = metadata["width"]
         height = metadata["height"]
@@ -174,17 +185,20 @@ def detect_spill(
         # 2. Get/create satellite image record
         # =====================================================
 
+        stage_started = time.perf_counter()
         satellite_image_id = (
             get_or_create_satellite_image(
                 image_name,
                 metadata
             )
         )
+        log_stage("satellite image lookup/create", stage_started)
 
         # =====================================================
         # 3. Save uploaded image temporarily
         # =====================================================
 
+        stage_started = time.perf_counter()
         with tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".jpg"
@@ -195,14 +209,17 @@ def detect_spill(
             )
 
             temp_path = temp_file.name
+        log_stage("image write", stage_started)
 
         # =====================================================
         # 4. Run YOLO inference
         # =====================================================
 
+        stage_started = time.perf_counter()
         result = run_inference(
             temp_path
         )
+        log_stage("YOLO inference and result processing", stage_started)
 
         ai_rows = []
         spill_rows = []
@@ -212,6 +229,7 @@ def detect_spill(
         # 5. Process every YOLO detection
         # =====================================================
 
+        stage_started = time.perf_counter()
         for index, detection in enumerate(
             result["detections"]
         ):
@@ -394,6 +412,9 @@ def detect_spill(
                 "spill_code":
                     spill_code,
 
+                "detected_at":
+                    detected_at,
+
                 "confidence":
                     confidence,
 
@@ -418,6 +439,7 @@ def detect_spill(
                 "polygon":
                     polygon_geo,
             })
+        log_stage("georeferencing and spill row preparation", stage_started)
 
         # =====================================================
         # 10. Insert AI detections
@@ -425,6 +447,7 @@ def detect_spill(
 
         logger.info("[DETECT] Supabase operations started")
 
+        stage_started = time.perf_counter()
         if ai_rows:
 
             ai_insert_response = (
@@ -465,6 +488,7 @@ def detect_spill(
                 raise RuntimeError(
                     "Failed to save spill records"
                 )
+        log_stage("AI and spill database inserts", stage_started)
 
         # =====================================================
         # 12. Generate drift + attribution for each new spill
@@ -483,7 +507,7 @@ def detect_spill(
             # -------------------------------------------------
 
             try:
-
+                stage_started = time.perf_counter()
                 generated_points = (
                     generate_drift_for_spill(
                         spill_uuid
@@ -501,6 +525,7 @@ def detect_spill(
                     "points":
                         len(generated_points)
                 })
+                log_stage(f"drift calculation ({spill_code})", stage_started)
 
             except Exception as drift_error:
 
@@ -531,7 +556,7 @@ def detect_spill(
             # -------------------------------------------------
 
             try:
-
+                stage_started = time.perf_counter()
                 candidates = (
                     calculate_attribution_for_spill(
                         spill_uuid
@@ -549,6 +574,7 @@ def detect_spill(
                     "candidates":
                         candidates
                 })
+                log_stage(f"attribution calculation ({spill_code})", stage_started)
 
             except Exception as attribution_error:
 
@@ -574,6 +600,7 @@ def detect_spill(
             "[DETECT] Supabase operations completed: %d spill(s) processed",
             len(inserted_spills)
         )
+        log_stage("total detection pipeline", pipeline_started)
 
         # =====================================================
         # 13. Return complete pipeline response
@@ -592,6 +619,10 @@ def detect_spill(
 
             "image_height":
                 height,
+
+            "detected_at":
+                (inserted_spills[0].get("detected_at")
+                 if len(inserted_spills) == 1 else None),
 
             "detections":
                 geographic_detections,

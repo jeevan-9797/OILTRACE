@@ -137,29 +137,13 @@ def move_point(
 # FIND NEAREST ENVIRONMENTAL DATA
 # =========================================================
 
-def get_nearest_environment(
+def _select_nearest_environment(
+    records: list,
     latitude: float,
     longitude: float,
     timestamp: datetime
 ):
-    """
-    Find the closest weather/ocean observation
-    based on location and time.
-    """
-
-    response = (
-        supabase
-        .table("weather_ocean_data")
-        .select(
-            "id, timestamp, latitude, longitude, "
-            "wind_speed, wind_direction, "
-            "current_speed, current_direction, "
-            "source, metadata"
-        )
-        .execute()
-    )
-
-    records = response.data or []
+    """Select the closest observation from an already-loaded snapshot."""
 
     if not records:
         return None
@@ -168,67 +152,62 @@ def get_nearest_environment(
     best_score = float("inf")
 
     for record in records:
-
-        record_lat = float(
-            record["latitude"]
-        )
-
-        record_lon = float(
-            record["longitude"]
-        )
-
+        record_lat = float(record["latitude"])
+        record_lon = float(record["longitude"])
         record_time = datetime.fromisoformat(
-            str(record["timestamp"])
-            .replace("Z", "+00:00")
+            str(record["timestamp"]).replace("Z", "+00:00")
         )
 
         if record_time.tzinfo is None:
-            record_time = record_time.replace(
-                tzinfo=timezone.utc
-            )
-
-        # -------------------------------------------------
-        # Spatial difference
-        # -------------------------------------------------
-
-        lat_difference = (
-            record_lat - latitude
-        )
-
-        lon_difference = (
-            record_lon - longitude
-        )
+            record_time = record_time.replace(tzinfo=timezone.utc)
 
         spatial_score = (
-            lat_difference ** 2
-            + lon_difference ** 2
+            (record_lat - latitude) ** 2
+            + (record_lon - longitude) ** 2
         )
-
-        # -------------------------------------------------
-        # Temporal difference
-        # -------------------------------------------------
-
         temporal_difference = abs(
-            (
-                record_time - timestamp
-            ).total_seconds()
+            (record_time - timestamp).total_seconds()
         ) / 3600.0
-
-        # -------------------------------------------------
-        # Combined score
-        # -------------------------------------------------
-
-        score = (
-            spatial_score
-            + temporal_difference / 100.0
-        )
+        score = spatial_score + temporal_difference / 100.0
 
         if score < best_score:
-
             best_score = score
             best_record = record
 
     return best_record
+
+
+def get_nearest_environment(
+    latitude: float,
+    longitude: float,
+    timestamp: datetime,
+    records: list | None = None
+):
+    """
+    Find the closest weather/ocean observation
+    based on location and time.
+    """
+
+    if records is None:
+        response = (
+            supabase
+            .table("weather_ocean_data")
+            .select(
+                "id, timestamp, latitude, longitude, "
+                "wind_speed, wind_direction, "
+                "current_speed, current_direction, "
+                "source, metadata"
+            )
+            .execute()
+        )
+        records = response.data or []
+
+    return _select_nearest_environment(
+        records,
+        latitude,
+        longitude,
+        timestamp,
+    )
 
 
 # =========================================================
@@ -239,7 +218,8 @@ def calculate_drift_step(
     latitude: float,
     longitude: float,
     timestamp: datetime,
-    hours: float
+    hours: float,
+    environment_records: list | None = None
 ):
     """
     Calculate one environmental drift step.
@@ -254,7 +234,8 @@ def calculate_drift_step(
     environment = get_nearest_environment(
         latitude,
         longitude,
-        timestamp
+        timestamp,
+        records=environment_records,
     )
 
     # -----------------------------------------------------
@@ -646,6 +627,19 @@ def generate_drift_for_spill(
 
     generated_points = []
 
+    environment_response = (
+        supabase
+        .table("weather_ocean_data")
+        .select(
+            "id, timestamp, latitude, longitude, "
+            "wind_speed, wind_direction, "
+            "current_speed, current_direction, "
+            "source, metadata"
+        )
+        .execute()
+    )
+    environment_records = environment_response.data or []
+
     for index in range(
         PREDICTION_POINTS
     ):
@@ -666,7 +660,8 @@ def generate_drift_for_spill(
             current_latitude,
             current_longitude,
             current_time,
-            STEP_HOURS
+            STEP_HOURS,
+            environment_records=environment_records,
         )
 
         generated_points.append(
