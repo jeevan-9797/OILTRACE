@@ -46,6 +46,11 @@ def root():
     }
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 # API routers
 app.include_router(spills_router)
 app.include_router(vessels_router)
