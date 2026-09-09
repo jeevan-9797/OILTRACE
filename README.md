@@ -1,444 +1,299 @@
-Absolutely. Since this is the **final README for the whole OILTRACE project**, I'd make it hackathon-ready rather than just documenting the backend.
-
-You can create a file named **`README.md` in the repository root** and paste this:
-
-```markdown
 # OILTRACE
 
-## AI-Powered Oil Spill Detection, Tracking & Analysis Platform
+## AI-Powered Oil Spill Detection, Drift Prediction & Vessel Attribution
 
-OILTRACE is an AI-powered platform designed to detect and analyze oil spills from satellite imagery and provide actionable information for monitoring and response.
+OILTRACE is an AI-driven oil-spill investigation platform that combines satellite imagery, computer vision, geospatial analysis, environmental data, and AIS vessel information to detect suspected oil spills, predict their movement, and rank vessels that may be associated with the spill.
 
-The system combines computer vision, geospatial analysis, vessel information, drift prediction, and attribution data into a unified platform.
-
----
-
-## 🚨 Problem
-
-Oil spills can cause severe environmental and economic damage. Detecting spills quickly and understanding their location, movement, and possible source is critical for effective response.
-
-Traditional monitoring methods can be:
-
-- Time-consuming
-- Dependent on manual image analysis
-- Difficult to scale
-- Slow to identify potential sources
-- Limited in providing rapid geospatial insights
-
-OILTRACE aims to automate the initial detection and analysis process using AI and geospatial data.
+> **Formal project title:** OILTRACE: An AI-Driven Platform for Satellite-Based Oil Spill Detection, Drift Forecasting and Responsible Vessel Attribution
 
 ---
 
-## 💡 Solution
+## 1. Problem
 
-OILTRACE processes satellite imagery using a trained YOLO segmentation model to identify potential oil spills.
+Detecting an oil spill is only the first step. Investigators also need to determine:
 
-After detection, the backend processes the detected spill and provides:
+- Where the spill occurred
+- How large it is
+- Where it may drift
+- Which vessels were operating nearby
+- Which vessel is the strongest candidate
+- What evidence supports that ranking
 
-- Spill detection information
-- Spill location
-- Detection confidence
-- Bounding boxes
-- Centroids
-- Spill polygons
-- Estimated spill area
-- Vessel information
-- Drift prediction
-- Source attribution
-- Supporting geospatial information
-
-The frontend consumes the backend APIs and presents the results through the application interface.
+OILTRACE brings these stages into one investigation workflow.
 
 ---
 
-# ✨ Key Features
-
-### 🛰️ AI-Based Oil Spill Detection
-
-Uses a trained YOLO segmentation model to detect oil spill regions in satellite imagery.
-
-### 🎯 Spill Segmentation
-
-The AI model provides segmentation information for detected spill regions rather than relying only on rectangular bounding boxes.
-
-### 📍 Geospatial Information
-
-Detected spill coordinates and polygon information are processed to provide geographic context.
-
-### 🚢 Vessel Analysis
-
-The system provides vessel information associated with a spill location and time.
-
-### 🌊 Drift Prediction
-
-The platform generates a predicted drift path for detected spills.
-
-### 🔎 Source Attribution
-
-The system calculates attribution information and candidate vessel/source scores for detected spills.
-
-### ☁️ Cloud Backend
-
-The FastAPI backend is deployed on Render and can be accessed remotely by the frontend.
-
-### 🗄️ Supabase Integration
-
-Supabase is used for storing and retrieving application data associated with spills, vessels, drift paths, attribution results, and related information.
-
-### 📖 Interactive API Documentation
-
-The backend provides automatically generated Swagger documentation through FastAPI.
-
----
-
-# 🏗️ System Architecture
+## 2. Solution
 
 ```text
-                    ┌──────────────────────┐
-                    │      User / UI       │
-                    │      Frontend        │
-                    └──────────┬───────────┘
-                               │
-                               │ HTTP / REST API
-                               ▼
-                    ┌──────────────────────┐
-                    │     FastAPI Backend  │
-                    │      OILTRACE API    │
-                    └──────────┬───────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-              ▼                ▼                ▼
-       ┌─────────────┐  ┌─────────────┐  ┌──────────────┐
-       │ YOLO Model  │  │  Supabase   │  │ Geospatial  │
-       │ Detection   │  │  Database   │  │ Processing  │
-       └──────┬──────┘  └─────────────┘  └──────┬───────┘
-              │                                  │
-              ▼                                  ▼
-       Spill Detection                    Drift / Vessel /
-       & Segmentation                     Attribution Data
-              │
-              └────────────────┬─────────────────┘
-                               ▼
-                    ┌──────────────────────┐
-                    │    API Response     │
-                    │ Detection + Analysis │
-                    └──────────────────────┘
+Sentinel-1 SAR / DARTIS
+          |
+          v
+   YOLO + PyTorch
+   Spill Detection
+          |
+          v
+ Georeferencing
+ Area + Centroid
+          |
+          v
+ Drift Prediction
+ Wind / Ocean Data
+          |
+          v
+    AIS Matching
+          |
+          v
+Attribution Engine
+          |
+          v
+Ranked Vessels
++ Evidence
+          |
+          v
+React + TypeScript
+Investigation Dashboard
 ```
 
 ---
 
-# 🔄 Detection Workflow
+## 3. Key Features
+
+### AI Oil-Spill Detection
+- Segmentation-based detection using Ultralytics YOLO and PyTorch.
+- Returns detection confidence and spill-region information.
+
+### Satellite Georeferencing
+- Uses DARTIS image metadata.
+- Calculates geographic spill centroid and affected area.
+
+### Drift Prediction
+- Generates historical and predicted spill movement paths.
+- Uses available environmental/ocean information.
+
+### AIS Vessel Investigation
+- Retrieves vessel identities and AIS positions.
+- Compares vessel movement with the spill and predicted drift.
+
+### Explainable Attribution
+Candidate vessels are ranked using:
+- Spatial proximity
+- Temporal proximity
+- Trajectory proximity
+- Vessel behaviour
+- Environmental compatibility
+
+### Investigation Dashboard
+Displays:
+- Spill polygon
+- Centroid
+- Historical and predicted drift
+- Vessel markers
+- Ranked suspect vessels
+- Attribution evidence
+- Detection time
+- Confidence and spill details
+
+---
+
+## 4. Technical Architecture
 
 ```text
-Satellite Image
-      │
-      ▼
-Image Upload
-      │
-      ▼
-FastAPI Detection Endpoint
-      │
-      ▼
-YOLO Segmentation Model
-      │
-      ▼
-Oil Spill Detection
-      │
-      ├── Bounding Box
-      ├── Centroid
-      ├── Polygon
-      ├── Confidence
-      └── Estimated Area
-      │
-      ▼
-Supabase Processing
-      │
-      ├── Spill Data
-      ├── Vessel Data
-      ├── Drift Data
-      └── Attribution Data
-      │
-      ▼
-Final API Response
-      │
-      ▼
-Frontend Visualization
+                  DATA SOURCES
+        +-----------+-----------+-----------+
+        |           |           |           |
+   Sentinel-1    DARTIS        AIS      Environment
+      SAR       Metadata     Vessels    Wind/Ocean
+        |           |           |           |
+        +-----------+-----------+-----------+
+                    |
+                    v
+             +-------------+
+             |   FastAPI   |
+             |   Backend   |
+             +-------------+
+                    |
+          +---------+---------+
+          |                   |
+          v                   v
+    YOLO + PyTorch      Geospatial Logic
+    Spill Detection     Centroid / Area
+          |                   |
+          +---------+---------+
+                    |
+                    v
+             Drift Prediction
+                    |
+                    v
+              AIS Correlation
+                    |
+                    v
+             Attribution Engine
+                    |
+                    v
+             Supabase / PostgreSQL
+                    |
+                    v
+           React + TypeScript
+                + D3.js
 ```
 
 ---
 
-# 🧠 AI / ML
+## 5. Technology Stack
 
-OILTRACE uses a YOLO segmentation model trained for oil spill detection.
-
-### Model
-
-- Architecture: YOLOv8n-seg
-- Task: Image segmentation
-- Input resolution: 640 × 640
-- Inference device: CPU
-- Model weights: `best.pt`
-
-The model is integrated into the FastAPI backend for remote inference.
-
-### Inference Optimization
-
-The deployed backend uses CPU-oriented optimizations including:
-
-- Single PyTorch thread
-- CPU inference
-- Inference mode / disabled gradients
-- Controlled image resolution
-- Limited maximum detections
-- Reduced mask memory usage
-- Model initialization during application startup
-
-These optimizations were implemented to allow inference within the memory constraints of the Render deployment environment.
+| Area | Technology | Purpose |
+|---|---|---|
+| Frontend | React | Investigation dashboard |
+| Language | TypeScript | Type-safe frontend |
+| Visualization | D3.js | Investigation/data visualization |
+| Backend | Python | Core processing |
+| API | FastAPI | REST API |
+| Validation | Pydantic | API validation |
+| Server | Uvicorn | ASGI server |
+| AI/ML | Ultralytics YOLO | Oil-spill segmentation/detection |
+| ML Framework | PyTorch | Model inference |
+| Database | Supabase / PostgreSQL | Application and investigation data |
+| Satellite | Sentinel-1 SAR | Primary satellite imagery |
+| Metadata | DARTIS | Image dimensions and geographic corners |
+| Vessel Data | AIS | Vessel positions and identities |
+| Environment | Weather/Ocean data | Drift and environmental analysis |
 
 ---
 
-# 🔌 API
+## 6. Workflow
 
-## Base URL
+### Step 1 — Upload
+The investigator uploads a supported satellite image.
+
+### Step 2 — Metadata Lookup
+The backend identifies the image in the DARTIS metadata dataset and obtains its geographic corners and dimensions.
+
+### Step 3 — AI Detection
+The YOLO segmentation model detects suspected oil-spill regions.
+
+### Step 4 — Georeferencing
+Detected regions are converted into geographic information and used to calculate spill centroid and area.
+
+### Step 5 — Drift Prediction
+Environmental/ocean information is used to generate historical/predicted spill movement.
+
+### Step 6 — AIS Correlation
+Vessel positions are compared with the spill location and predicted trajectory.
+
+### Step 7 — Attribution
+Candidate vessels receive evidence-based component scores.
+
+### Step 8 — Investigation Result
+The frontend displays the ranked vessels and supporting evidence.
+
+---
+
+## 7. Attribution Scoring
+
+The current weighted model is:
 
 ```text
-https://oil-trace.onrender.com
+Final Score =
+    Spatial Proximity      × 25%
+  + Temporal Proximity     × 20%
+  + Trajectory Proximity   × 25%
+  + Behaviour              × 10%
+  + Environment            × 20%
 ```
 
-## Swagger Documentation
+This allows multiple independent signals to contribute to vessel ranking.
 
-```text
-https://oil-trace.onrender.com/docs
-```
-
-The Swagger interface can be used to test the API directly from a browser.
+The score is an investigation confidence/ranking signal, **not legal proof of responsibility**.
 
 ---
 
-## Available Endpoints
+## 8. API Overview
 
-### Health
-
-```http
-GET /api/health
-```
-
-Checks the health/status of the backend.
-
----
-
-### Oil Spill Detection
+### Detect spill
 
 ```http
 POST /api/spills/detect
 ```
 
-Uploads an image and performs AI-based oil spill detection.
+Accepts an uploaded image and runs the detection pipeline.
 
-The response can contain information including:
+Typical response fields include:
 
-- Image name
-- Satellite image ID
-- Image dimensions
-- Detected spills
-- Confidence scores
-- Bounding boxes
-- Centroids
-- Polygon coordinates
-- Spill areas
-- Drift information
-- Attribution information
-
----
-
-### Vessel Information
-
-```http
-GET /api/spills/{spill_id}/vessels
+```json
+{
+  "image": "example.jpg",
+  "satellite_image_id": "...",
+  "image_width": 640,
+  "image_height": 640,
+  "detections": [],
+  "spills_created": 0,
+  "drift": [],
+  "attribution": [],
+  "detected_at": "..."
+}
 ```
 
-Retrieves vessel information associated with a spill.
-
----
-
-### Drift Prediction
-
-```http
-GET /api/spills/{spill_id}/drift
-```
-
-Retrieves the predicted drift path for a spill.
-
----
-
-### Attribution
+### Get attribution
 
 ```http
 GET /api/spills/{spill_id}/attribution
 ```
 
-Retrieves attribution scores and candidate source information for a spill.
+Returns attribution information and candidate vessels for a spill.
+
+Swagger documentation is available at `/docs` when the FastAPI backend is running.
 
 ---
 
-### Spill Details
-
-```http
-GET /api/spills/{spill_id}
-```
-
-Retrieves complete information associated with a specific spill.
-
----
-
-# 🛠️ Technology Stack
-
-## Backend
-
-- Python
-- FastAPI
-- Uvicorn
-- Pydantic
-
-## AI / Machine Learning
-
-- PyTorch
-- Ultralytics YOLO
-- YOLOv8n-seg
-- OpenCV
-- NumPy
-
-## Database / Backend Services
-
-- Supabase
-
-## Deployment
-
-- Render
-
-## API Documentation
-
-- Swagger UI
-- OpenAPI
-
----
-
-# 📁 Project Structure
+## 9. Project Structure
 
 ```text
-SIH2026-INNOVATORS/
-│
+OILTRACE/
 ├── Backend/
-│   │
 │   ├── app/
 │   │   ├── api/
-│   │   │   └── routes/
-│   │   │       ├── spills.py
-│   │   │       ├── vessels.py
-│   │   │       ├── drift.py
-│   │   │       ├── attribution.py
-│   │   │       ├── health.py
-│   │   │       └── spill_details.py
-│   │   │
 │   │   ├── services/
-│   │   │   ├── ai/
-│   │   │   └── ...
-│   │   │
 │   │   └── main.py
-│   │
 │   ├── data/
-│   ├── runs/
-│   ├── tests/
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── API_CONTRACT.md
-│
-├── Frontend/
-│   └── ...
-│
-├── AI-ML/
-│   └── ...
-│
+│   │   └── image_geospatial_metadata.csv
+│   └── runs/
+│       └── segment/
+│           └── train-2/
+│               └── weights/
+│                   └── best.pt
+├── src/
+│   └── App.tsx
+├── DEMO/
+│   └── fixture_ais_nc0009.sql
+├── package.json
 └── README.md
 ```
 
-> The exact frontend and AI/ML directory structure can be updated as those components are finalized.
-
 ---
 
-# ⚙️ Backend Setup
+## 10. Local Setup
 
-## 1. Clone the repository
+### Prerequisites
 
-```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd SIH2026-INNOVATORS
-```
+- Python 3.10+
+- Node.js 18+
+- npm
+- Git
+- Supabase/PostgreSQL project
+- Required environment variables
 
----
+### Backend
 
-## 2. Navigate to the backend
-
-```bash
+```powershell
 cd Backend
-```
-
----
-
-## 3. Create a virtual environment
-
-### Windows PowerShell
-
-```powershell
-python -m venv venv
-```
-
-Activate it:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-```
-
-### Linux / macOS
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
----
-
-## 4. Install dependencies
-
-```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
----
-
-## 5. Configure environment variables
-
-Create a `.env` file based on `.env.example`.
-
-Example:
-
-```env
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-```
-
-Do **not** commit `.env` or any private credentials to GitHub.
-
----
-
-## 6. Run the backend
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-The API will normally be available at:
+Backend:
 
 ```text
 http://127.0.0.1:8000
@@ -450,221 +305,158 @@ Swagger:
 http://127.0.0.1:8000/docs
 ```
 
+### Frontend
+
+From the project root:
+
+```powershell
+npm install
+npm run dev
+```
+
+Open the development URL shown by Vite.
+
 ---
 
-# 🚀 Deployment
+## 11. Environment Variables
 
-The OILTRACE backend is deployed on Render.
+Never commit secrets.
 
-### Production API
+Typical backend configuration includes:
+
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+```
+
+Use the exact variable names required by the current backend configuration.
+
+---
+
+## 12. Demo AIS Fixture
+
+The repository contains:
 
 ```text
-https://oil-trace.onrender.com
+DEMO/fixture_ais_nc0009.sql
 ```
 
-### Start Command
+The fixture provides geographically and temporally aligned AIS positions for the demonstration scenario.
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
-```
+It uses the existing demo vessel identities:
 
-The backend uses a single Uvicorn worker because the AI model is memory-intensive and multiple workers would duplicate the model in memory.
+- **VESSEL ALPHA** — strongest candidate
+- **VESSEL BRAVO** — secondary candidate
+- **VESSEL CHARLIE** — lower-ranked candidate
 
-### Render Memory Optimization
-
-The deployment uses CPU-only machine learning dependencies and headless OpenCV to reduce unnecessary memory usage on the server.
-
-The YOLO model is also initialized during application startup.
-
-> The free Render instance may spin down after inactivity. As a result, the first request after a period of inactivity can take significantly longer than subsequent requests.
+The fixture is for controlled demonstration/testing and should only be inserted when the required vessel records exist.
 
 ---
 
-# 🧪 Testing
+## 13. Deployment
 
-The backend includes automated API tests.
+### Frontend
+The frontend can be deployed to a web platform such as Vercel.
 
-Run:
+### Backend
+The FastAPI backend can be deployed as a web service such as Render.
 
-```bash
-pytest
-```
+Verify during deployment:
 
-The detection pipeline should also be tested using a valid satellite image through:
+1. Correct repository and branch
+2. Correct backend root directory
+3. Correct FastAPI start command
+4. Required environment variables
+5. Production CORS origin
+6. YOLO model weights available to the service
+
+---
+
+## 14. Performance
+
+The most computationally expensive stage of the current pipeline is YOLO inference on CPU.
+
+The model is loaded once and reused by the backend process, but CPU inference can still take significant time.
+
+Potential production optimizations include:
+
+- Smaller inference size/model
+- GPU acceleration
+- Model quantization
+- Asynchronous/background processing
+- Caching repeated processing
+- More powerful deployment resources
+
+Accuracy should always be validated after performance changes.
+
+---
+
+## 15. Limitations
+
+- AIS quality and availability affect vessel attribution.
+- Attribution requires suitable spatial and temporal AIS coverage.
+- The DARTIS CSV currently provides geographic image metadata but not per-image acquisition timestamps.
+- Environmental data availability affects drift prediction.
+- AI detections are probabilistic and require investigation/review.
+- Attribution scores are ranking signals, not definitive proof of liability.
+- CPU inference can introduce noticeable processing time.
+
+---
+
+## 16. Future Improvements
+
+- Real-time AIS ingestion
+- Larger historical vessel-track datasets
+- GPU/model optimization
+- Improved ocean/drift modelling
+- Automated Sentinel-1 ingestion
+- Multi-temporal satellite comparison
+- Advanced vessel behaviour analysis
+- Investigator case management
+- Evidence/report export
+- Better uncertainty estimation
+
+---
+
+## 17. Why OILTRACE?
+
+Most oil-spill systems focus on detection.
+
+OILTRACE connects the complete investigation chain:
 
 ```text
-POST /api/spills/detect
+DETECT
+  ↓
+GEOREFERENCE
+  ↓
+PREDICT DRIFT
+  ↓
+MATCH AIS
+  ↓
+ATTRIBUTE VESSEL
+  ↓
+EXPLAIN EVIDENCE
 ```
 
-A successful detection request should return:
-
-```text
-HTTP 200 OK
-```
-
-and provide detection and analysis information in the response.
+This transforms satellite observations into an actionable, evidence-oriented vessel investigation workflow.
 
 ---
 
-# 🔐 Security
-
-Never commit sensitive credentials.
-
-The following types of files should remain local:
-
-```text
-.env
-.env.local
-*.pem
-*.key
-```
-
-Use environment variables for production credentials and API keys.
-
----
-
-# 📊 Example Detection Result
-
-A successful detection response contains information similar to:
-
-```json
-{
-  "image": "example.jpg",
-  "satellite_image_id": "example-id",
-  "image_width": 640,
-  "image_height": 640,
-  "detections": [
-    {
-      "spill_code": "SP-AI-XXXX",
-      "confidence": 0.92,
-      "bbox": [100, 120, 300, 350],
-      "centroid_pixels": [200, 235],
-      "centroid": [35.91, 35.41],
-      "area_pixels": 8704,
-      "area_km2": 3.44,
-      "polygon_pixels": []
-    }
-  ]
-}
-```
-
-> The exact values depend on the image submitted to the detection endpoint.
-
----
-
-# 🌍 Intended Impact
-
-OILTRACE aims to help improve the speed and efficiency of oil spill monitoring by combining automated image analysis with geospatial and vessel information.
-
-Potential benefits include:
-
-- Faster spill identification
-- Reduced dependence on manual image inspection
-- Improved situational awareness
-- Faster access to spill location information
-- Support for identifying potential sources
-- Better understanding of spill movement
-
----
-
-# 🏆 Hackathon Project
-
-OILTRACE was developed as a collaborative project for the Smart India Hackathon.
-
-The project brings together:
-
-- AI / Machine Learning
-- Backend Engineering
-- Frontend Development
-- Database Integration
-- Geospatial Processing
-- UI/UX Design
-
-The architecture is designed so that individual components can be developed independently while communicating through well-defined APIs.
-
----
-
-# 👥 Team
+## 18. Team
 
 **Project:** OILTRACE
 
-**Team:** SIH2026-INNOVATORS
+**Formal Title:**  
+OILTRACE: An AI-Driven Platform for Satellite-Based Oil Spill Detection, Drift Forecasting and Responsible Vessel Attribution
 
-Team members and individual responsibilities can be added here:
+**Hackathon:** Smart India Hackathon
 
-| Member | Role |
-|---|---|
-| Member 1 | Backend |
-| Member 2 | AI / ML |
-| Member 3 | Frontend |
-| Member 4 | UI/UX |
-| Member 5 | Integration |
-| Member 6 | Testing / Documentation |
+**Team:** Add team members and Team ID.
+
+**Problem Statement ID:** Add official SIH Problem Statement ID.
 
 ---
 
-# 📌 Current Status
+## 19. Disclaimer
 
-### Backend
-
-- [x] FastAPI implementation
-- [x] REST APIs
-- [x] YOLO oil spill detection
-- [x] Segmentation processing
-- [x] Supabase integration
-- [x] Vessel API
-- [x] Drift API
-- [x] Attribution API
-- [x] Health API
-- [x] Swagger documentation
-- [x] Render deployment
-- [x] Production detection test
-
-### Frontend
-
-- [x] Backend integration
-- [ ] Final end-to-end testing
-- [ ] Final UI/UX polish
-
-### AI / ML
-
-- [x] Dataset preparation
-- [x] YOLO segmentation model
-- [x] Backend inference integration
-- [x] Production inference testing
-
----
-
-# 🔮 Future Improvements
-
-Potential future improvements include:
-
-- Improved model accuracy with additional training data
-- More efficient large-scale inference
-- Improved drift prediction
-- Advanced vessel-source correlation
-- Real-time monitoring
-- Alert and notification systems
-- More detailed geospatial visualization
-- Production-scale infrastructure
-
----
-
-# 📜 License
-
-Add the project's chosen license here.
-
----
-
-## OILTRACE
-
-**Detect. Analyze. Track. Respond.**
-```
-
-### One thing I'd change before you commit
-
-Don't leave the README's **team names, frontend structure, or license** as fake information. Replace those placeholders with your actual details.
-
-And **don't put your Supabase URL/key, Gemini API key, or any other secret in the README**.
-
-For the hackathon, this README is enough to make the repository look like a **complete project rather than just a collection of backend/AI files**.
+OILTRACE is a decision-support and investigation prototype. Detection and attribution outputs should be validated against authoritative satellite, AIS, environmental, and investigative evidence before use in enforcement, legal, or regulatory decisions.
