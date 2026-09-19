@@ -154,7 +154,7 @@ def detect_spill(
 
     def log_stage(stage: str, started: float):
         logger.info(
-            "[TIMING] %s: %.3fs",
+            "[TIMING] %s: %.2fs",
             stage,
             time.perf_counter() - started,
         )
@@ -209,7 +209,7 @@ def detect_spill(
             )
 
             temp_path = temp_file.name
-        log_stage("image write", stage_started)
+        log_stage("image_preprocessing", stage_started)
 
         # =====================================================
         # 4. Run YOLO inference
@@ -439,7 +439,7 @@ def detect_spill(
                 "polygon":
                     polygon_geo,
             })
-        log_stage("georeferencing and spill row preparation", stage_started)
+        log_stage("spill_processing", stage_started)
 
         # =====================================================
         # 10. Insert AI detections
@@ -497,6 +497,72 @@ def detect_spill(
         drift_results = []
         attribution_results = []
 
+        # Per-request shared data: fetch weather and AIS data once for all spills in this request
+        shared_weather_records = None
+        shared_vessel_positions = None
+        shared_vessel_names = None
+        shared_vessel_details = None
+
+        if inserted_spills:
+            try:
+                weather_resp = (
+                    supabase
+                    .table("weather_ocean_data")
+                    .select(
+                        "id, timestamp, latitude, longitude, "
+                        "wind_speed, wind_direction, "
+                        "current_speed, current_direction, "
+                        "source, metadata"
+                    )
+                    .execute()
+                )
+                shared_weather_records = weather_resp.data or []
+            except Exception as w_err:
+                logger.warning("[DETECT] Failed to pre-fetch shared weather data: %s", w_err)
+
+            try:
+                positions_resp = (
+                    supabase
+                    .table("vessel_positions")
+                    .select(
+                        "mmsi, timestamp, latitude, "
+                        "longitude, speed_knots, "
+                        "heading_deg"
+                    )
+                    .execute()
+                )
+                raw_positions = positions_resp.data or []
+                if raw_positions:
+                    grouped_positions = {}
+                    for pos in raw_positions:
+                        mmsi = str(pos["mmsi"])
+                        if mmsi not in grouped_positions:
+                            grouped_positions[mmsi] = []
+                        grouped_positions[mmsi].append(pos)
+                    shared_vessel_positions = grouped_positions
+
+                    mmsis = list(grouped_positions.keys())
+                    vessels_resp = (
+                        supabase
+                        .table("vessels")
+                        .select("mmsi, name, vessel_type, flag")
+                        .in_("mmsi", mmsis)
+                        .execute()
+                    )
+                    shared_vessel_names = {
+                        str(v["mmsi"]): (v.get("name") or "UNKNOWN VESSEL")
+                        for v in (vessels_resp.data or [])
+                    }
+                    shared_vessel_details = {
+                        str(v["mmsi"]): v
+                        for v in (vessels_resp.data or [])
+                    }
+            except Exception as v_err:
+                logger.warning("[DETECT] Failed to pre-fetch shared vessel data: %s", v_err)
+
+        all_drift_points = []
+        all_attribution_rows = []
+
         for spill in inserted_spills:
 
             spill_uuid = spill["id"]
@@ -508,24 +574,29 @@ def detect_spill(
 
             try:
                 stage_started = time.perf_counter()
-                generated_points = (
+                # In-memory data reuse: pass spill record, is_new_spill=True, and shared weather records
+                # Batch writes: pass save_to_db=False to batch insert all points after loop
+                generated_points, drift_status, coverage_details = (
                     generate_drift_for_spill(
-                        spill_uuid
+                        spill_uuid,
+                        spill_record=spill,
+                        is_new_spill=True,
+                        environment_records=shared_weather_records,
+                        save_to_db=False,
+                        return_details=True
                     )
                 )
+                if generated_points:
+                    all_drift_points.extend(generated_points)
 
                 drift_results.append({
-
-                    "spill_id":
-                        spill_code,
-
-                    "status":
-                        "generated",
-
-                    "points":
-                        len(generated_points)
+                    "spill_id": spill_code,
+                    "status": drift_status,
+                    "points": len(generated_points),
+                    "environmental_coverage": (drift_status == "normal"),
+                    "coverage_details": coverage_details
                 })
-                log_stage(f"drift calculation ({spill_code})", stage_started)
+                log_stage("drift", stage_started)
 
             except Exception as drift_error:
 
@@ -557,11 +628,22 @@ def detect_spill(
 
             try:
                 stage_started = time.perf_counter()
-                candidates = (
+                # In-memory data reuse: pass spill record, generated drift points, and shared vessel data
+                # Batch writes: pass save_to_db=False and return_db_rows=True to batch upsert all rows after loop
+                candidates, attr_rows = (
                     calculate_attribution_for_spill(
-                        spill_uuid
+                        spill_uuid,
+                        spill_record=spill,
+                        drift_points=generated_points,
+                        vessel_positions=shared_vessel_positions,
+                        vessel_names=shared_vessel_names,
+                        save_to_db=False,
+                        return_db_rows=True,
+                        vessel_details=shared_vessel_details
                     )
                 )
+                if attr_rows:
+                    all_attribution_rows.extend(attr_rows)
 
                 attribution_results.append({
 
@@ -569,7 +651,7 @@ def detect_spill(
                         spill_code,
 
                     "status":
-                        "calculated",
+                        "calculated" if candidates else "no_eligible_vessels",
 
                     "candidates":
                         candidates
@@ -595,6 +677,39 @@ def detect_spill(
                     "error":
                         str(attribution_error)
                 })
+
+        # =====================================================
+        # Batch bulk database writes for drift points & attribution
+        # =====================================================
+
+        if all_drift_points:
+            stage_started = time.perf_counter()
+            try:
+                (
+                    supabase
+                    .table("spill_drift_points")
+                    .insert(all_drift_points)
+                    .execute()
+                )
+                log_stage(f"bulk drift points insert ({len(all_drift_points)} points)", stage_started)
+            except Exception as b_drift_err:
+                logger.warning("[DETECT] Failed to bulk insert drift points: %s", b_drift_err)
+
+        if all_attribution_rows:
+            stage_started = time.perf_counter()
+            try:
+                (
+                    supabase
+                    .table("attribution_scores")
+                    .upsert(
+                        all_attribution_rows,
+                        on_conflict="spill_id,mmsi"
+                    )
+                    .execute()
+                )
+                log_stage(f"bulk attribution scores upsert ({len(all_attribution_rows)} rows)", stage_started)
+            except Exception as b_attr_err:
+                logger.warning("[DETECT] Failed to bulk upsert attribution scores: %s", b_attr_err)
 
         logger.info(
             "[DETECT] Supabase operations completed: %d spill(s) processed",

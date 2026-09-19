@@ -1,3 +1,5 @@
+import logging
+import time
 from math import radians, sin, cos, sqrt, atan2
 from datetime import datetime
 
@@ -15,6 +17,7 @@ router = APIRouter(
     tags=["Attribution"]
 )
 
+logger = logging.getLogger("oiltrace.attribution")
 
 MODEL_VERSION = "v1.0.0"
 
@@ -69,6 +72,14 @@ def haversine_km(
 
 
 # =========================================================
+# ATTRIBUTION ELIGIBILITY THRESHOLDS
+# =========================================================
+
+SPATIAL_THRESHOLD_KM = 50.0
+TEMPORAL_THRESHOLD_HOURS = 24.0
+
+
+# =========================================================
 # SPATIAL SCORE
 # =========================================================
 
@@ -77,7 +88,7 @@ def calculate_spatial_score(
 ) -> float:
 
     score = 100 - (
-        distance_km / 50 * 100
+        distance_km / SPATIAL_THRESHOLD_KM * 100
     )
 
     return max(
@@ -102,7 +113,7 @@ def calculate_temporal_score(
     ) / 3600
 
     score = 100 - (
-        difference_hours / 24 * 100
+        difference_hours / TEMPORAL_THRESHOLD_HOURS * 100
     )
 
     return max(
@@ -278,7 +289,14 @@ def calculate_environment_score(
 # =========================================================
 
 def calculate_attribution_for_spill(
-    spill_uuid: str
+    spill_uuid: str,
+    spill_record: dict | None = None,
+    drift_points: list | None = None,
+    vessel_positions: dict | None = None,
+    vessel_names: dict | None = None,
+    save_to_db: bool = True,
+    return_db_rows: bool = False,
+    vessel_details: dict | None = None
 ):
     """
     Calculate, rank and save vessel attribution
@@ -292,28 +310,32 @@ def calculate_attribution_for_spill(
     # 1. GET SPILL
     # =====================================================
 
-    spill_response = (
-        supabase
-        .table("spills")
-        .select(
-            "id, spill_code, "
-            "centroid_latitude, "
-            "centroid_longitude, "
-            "detected_at, "
-            "estimated_origin_at"
-        )
-        .eq("id", spill_uuid)
-        .limit(1)
-        .execute()
-    )
-
-    if not spill_response.data:
-
-        raise ValueError(
-            f"Spill '{spill_uuid}' not found"
+    if spill_record:
+        # In-memory data reuse: use provided spill record to eliminate redundant Supabase SELECT
+        spill = spill_record
+    else:
+        spill_response = (
+            supabase
+            .table("spills")
+            .select(
+                "id, spill_code, "
+                "centroid_latitude, "
+                "centroid_longitude, "
+                "detected_at, "
+                "estimated_origin_at"
+            )
+            .eq("id", spill_uuid)
+            .limit(1)
+            .execute()
         )
 
-    spill = spill_response.data[0]
+        if not spill_response.data:
+
+            raise ValueError(
+                f"Spill '{spill_uuid}' not found"
+            )
+
+        spill = spill_response.data[0]
 
     spill_code = spill["spill_code"]
 
@@ -348,111 +370,139 @@ def calculate_attribution_for_spill(
     # 3. DRIFT POINTS
     # =====================================================
 
-    drift_response = (
-        supabase
-        .table("spill_drift_points")
-        .select(
-            "latitude, longitude, "
-            "timestamp, path_type"
-        )
-        .eq(
-            "spill_id",
-            spill_uuid
-        )
-        .order(
-            "sequence_no"
-        )
-        .execute()
-    )
-
-    drift_points = (
-        drift_response.data
-        or []
-    )
-
-    # =====================================================
-    # 4. VESSEL POSITIONS
-    # =====================================================
-
-    positions_response = (
-        supabase
-        .table("vessel_positions")
-        .select(
-            "mmsi, timestamp, latitude, "
-            "longitude, speed_knots, "
-            "heading_deg"
-        )
-        .execute()
-    )
-
-    positions = (
-        positions_response.data
-        or []
-    )
-
-    if not positions:
-
-        return []
-
-    # =====================================================
-    # 5. GROUP POSITIONS BY MMSI
-    # =====================================================
-
-    vessel_positions = {}
-
-    for position in positions:
-
-        mmsi = str(
-            position["mmsi"]
+    if drift_points is not None:
+        # In-memory data reuse: use generated drift points directly to eliminate redundant Supabase SELECT
+        pass
+    else:
+        drift_response = (
+            supabase
+            .table("spill_drift_points")
+            .select(
+                "latitude, longitude, "
+                "timestamp, path_type"
+            )
+            .eq(
+                "spill_id",
+                spill_uuid
+            )
+            .order(
+                "sequence_no"
+            )
+            .execute()
         )
 
-        if mmsi not in vessel_positions:
-
-            vessel_positions[mmsi] = []
-
-        vessel_positions[mmsi].append(
-            position
+        drift_points = (
+            drift_response.data
+            or []
         )
 
     # =====================================================
-    # 6. VESSEL NAMES
+    # 4. VESSEL POSITIONS & NAMES
     # =====================================================
 
-    mmsis = list(
-        vessel_positions.keys()
-    )
+    ais_started = time.perf_counter()
 
-    vessels_response = (
-        supabase
-        .table("vessels")
-        .select(
-            "mmsi, name"
+    if vessel_positions is not None and vessel_names is not None:
+        # Per-request shared data reuse: use pre-fetched vessel positions and names
+        logger.info(
+            "[TIMING] ais: %.2fs",
+            time.perf_counter() - ais_started
         )
-        .in_(
-            "mmsi",
-            mmsis
+    else:
+        positions_response = (
+            supabase
+            .table("vessel_positions")
+            .select(
+                "mmsi, timestamp, latitude, "
+                "longitude, speed_knots, "
+                "heading_deg"
+            )
+            .execute()
         )
-        .execute()
-    )
 
-    vessel_names = {}
+        positions = (
+            positions_response.data
+            or []
+        )
 
-    for vessel in (
-        vessels_response.data
-        or []
-    ):
+        if not positions:
+            logger.info(
+                "[TIMING] ais: %.2fs",
+                time.perf_counter() - ais_started
+            )
+            logger.info(
+                "[TIMING] attribution: %.2fs",
+                0.0
+            )
 
-        vessel_names[
-            str(vessel["mmsi"])
-        ] = (
-            vessel.get("name")
-            or "UNKNOWN VESSEL"
+            return []
+
+        # =====================================================
+        # 5. GROUP POSITIONS BY MMSI
+        # =====================================================
+
+        vessel_positions = {}
+
+        for position in positions:
+
+            mmsi = str(
+                position["mmsi"]
+            )
+
+            if mmsi not in vessel_positions:
+
+                vessel_positions[mmsi] = []
+
+            vessel_positions[mmsi].append(
+                position
+            )
+
+        # =====================================================
+        # 6. VESSEL NAMES
+        # =====================================================
+
+        mmsis = list(
+            vessel_positions.keys()
+        )
+
+        vessels_response = (
+            supabase
+            .table("vessels")
+            .select(
+                "mmsi, name, vessel_type, flag"
+            )
+            .in_(
+                "mmsi",
+                mmsis
+            )
+            .execute()
+        )
+
+        vessel_names = {}
+        if vessel_details is None:
+            vessel_details = {}
+
+        for vessel in (
+            vessels_response.data
+            or []
+        ):
+            v_mmsi = str(vessel["mmsi"])
+            vessel_names[v_mmsi] = (
+                vessel.get("name")
+                or "UNKNOWN VESSEL"
+            )
+            vessel_details[v_mmsi] = vessel
+
+        logger.info(
+            "[TIMING] ais: %.2fs",
+            time.perf_counter() - ais_started
         )
 
     # =====================================================
     # 7. CALCULATE SCORES
     # =====================================================
 
+    attribution_started = time.perf_counter()
     candidates = []
 
     best_positions = {}
@@ -461,8 +511,10 @@ def calculate_attribution_for_spill(
         vessel_positions.items()
     ):
 
-        best_position = None
-        best_total = -1
+        best_eligible_position = None
+        best_eligible_score = -1
+        best_overall_position = None
+        best_overall_score = -1
 
         for position in positions_for_vessel:
 
@@ -506,6 +558,10 @@ def calculate_attribution_for_spill(
                 )
             )
 
+            difference_hours = abs(
+                (vessel_time - spill_time).total_seconds()
+            ) / 3600.0
+
             # -------------------------------------------------
             # Trajectory
             # -------------------------------------------------
@@ -518,6 +574,18 @@ def calculate_attribution_for_spill(
                 )
             )
 
+            min_drift_distance = None
+            if drift_points:
+                min_drift_distance = min(
+                    haversine_km(
+                        latitude,
+                        longitude,
+                        float(point["latitude"]),
+                        float(point["longitude"])
+                    )
+                    for point in drift_points
+                )
+
             # -------------------------------------------------
             # Behaviour
             # -------------------------------------------------
@@ -529,48 +597,81 @@ def calculate_attribution_for_spill(
             )
 
             # -------------------------------------------------
-            # Final score
+            # Environment
             # -------------------------------------------------
 
             environment_score = calculate_environment_score(
-    position,
-    drift_points
-) 
+                position,
+                drift_points
+            )
+
+            # -------------------------------------------------
+            # Final score (EXACT EXISTING FORMULA & WEIGHTS)
+            # -------------------------------------------------
+
             final_score = (
-    spatial_score * 0.25
-    +
-    temporal_score * 0.20
-    +
-    trajectory_score * 0.25
-    +
-    behaviour_score * 0.10
-    +
-    environment_score * 0.20
-           )
+                spatial_score * 0.25
+                +
+                temporal_score * 0.20
+                +
+                trajectory_score * 0.25
+                +
+                behaviour_score * 0.10
+                +
+                environment_score * 0.20
+            )
 
             # -------------------------------------------------
-            # Keep best position
+            # Eligibility classification
             # -------------------------------------------------
 
-            if final_score > best_total:
+            is_spatial_eligible = distance_km <= SPATIAL_THRESHOLD_KM
+            is_temporal_eligible = difference_hours <= TEMPORAL_THRESHOLD_HOURS
 
-                best_total = final_score
+            if is_spatial_eligible and is_temporal_eligible:
+                eligibility_status = "eligible"
+            elif not is_spatial_eligible and not is_temporal_eligible:
+                eligibility_status = "out_of_range_and_time"
+            elif not is_spatial_eligible:
+                eligibility_status = "out_of_range"
+            else:
+                eligibility_status = "out_of_time_window"
 
-                best_position = {
-                    "position": position,
-                    "distance_km": distance_km,
-                    "spatial": spatial_score,
-                    "temporal": temporal_score,
-                    "trajectory": trajectory_score,
-                    "environment": environment_score,
-                    "behaviour": behaviour_score,
-                    "final": final_score
-                }
+            evaluated_position = {
+                "position": position,
+                "distance_km": distance_km,
+                "spatial": spatial_score,
+                "temporal": temporal_score,
+                "trajectory": trajectory_score,
+                "environment": environment_score,
+                "behaviour": behaviour_score,
+                "final": final_score,
+                "temporal_difference_hours": round(difference_hours, 2),
+                "trajectory_min_distance_km": (
+                    round(min_drift_distance, 3)
+                    if min_drift_distance is not None
+                    else None
+                ),
+                "eligibility_status": eligibility_status
+            }
 
-        if best_position:
+            if eligibility_status == "eligible":
+                if final_score > best_eligible_score:
+                    best_eligible_score = final_score
+                    best_eligible_position = evaluated_position
+
+            if final_score > best_overall_score:
+                best_overall_score = final_score
+                best_overall_position = evaluated_position
+
+        # =====================================================
+        # Eligibility Gate: Only eligible candidates are kept
+        # =====================================================
+
+        if best_eligible_position is not None:
 
             best_positions[mmsi] = (
-                best_position
+                best_eligible_position
             )
 
             candidates.append(
@@ -585,38 +686,52 @@ def calculate_attribution_for_spill(
 
                     "spatial_score":
                         round(
-                            best_position["spatial"],
+                            best_eligible_position["spatial"],
                             1
                         ),
 
                     "temporal_score":
                         round(
-                            best_position["temporal"],
+                            best_eligible_position["temporal"],
                             1
                         ),
 
                     "trajectory_score":
                         round(
-                            best_position["trajectory"],
+                            best_eligible_position["trajectory"],
                             1
                         ),
 
                     "behaviour_score":
                         round(
-                            best_position["behaviour"],
+                            best_eligible_position["behaviour"],
                             1
                         ),
                     "environment_score":
                         round( 
-                            best_position["environment"],
+                            best_eligible_position["environment"],
                             1
                         ),
                     "final_score":
                         round(
-                            best_position["final"],
+                            best_eligible_position["final"],
                             1
                         )
                 }
+            )
+        else:
+            exclusion_reason = (
+                best_overall_position["eligibility_status"]
+                if best_overall_position
+                else "out_of_range_and_time"
+            )
+            logger.info(
+                "[ATTRIBUTION] Vessel MMSI %s excluded by eligibility gate: %s "
+                "(best_distance=%.1f km, best_time_delta=%.1f h)",
+                mmsi,
+                exclusion_reason,
+                best_overall_position["distance_km"] if best_overall_position else -1.0,
+                best_overall_position["temporal_difference_hours"] if best_overall_position else -1.0
             )
 
     # =====================================================
@@ -709,8 +824,25 @@ def calculate_attribution_for_spill(
             },
 
             "drift_points_used":
-                len(drift_points)
+                len(drift_points),
+
+            "eligibility_status":
+                best.get("eligibility_status", "eligible")
         }
+
+        if best.get("temporal_difference_hours") is not None:
+            evidence["temporal_difference_hours"] = best["temporal_difference_hours"]
+
+        if best.get("trajectory_min_distance_km") is not None:
+            evidence["trajectory_min_distance_km"] = best["trajectory_min_distance_km"]
+
+        # Attach explainability fields to candidate object
+        candidate["rank"] = rank
+        candidate["evidence"] = evidence
+
+        v_info = vessel_details.get(str(mmsi), {}) if vessel_details else {}
+        candidate["vessel_type"] = v_info.get("vessel_type")
+        candidate["flag"] = v_info.get("flag")
 
         database_rows.append(
             {
@@ -772,7 +904,7 @@ def calculate_attribution_for_spill(
     # 10. SAVE TO DATABASE
     # =====================================================
 
-    if database_rows:
+    if database_rows and save_to_db:
 
         (
             supabase
@@ -784,9 +916,17 @@ def calculate_attribution_for_spill(
             .execute()
         )
 
+    logger.info(
+        "[TIMING] attribution: %.2fs",
+        time.perf_counter() - attribution_started
+    )
+
     # =====================================================
     # 11. RETURN CANDIDATES
     # =====================================================
+
+    if return_db_rows:
+        return candidates, database_rows
 
     return candidates
 
@@ -880,7 +1020,15 @@ def get_attribution(
             environment_score=
                 candidate["environment_score"],
             final_score=
-                candidate["final_score"]
+                candidate["final_score"],
+            rank=
+                candidate.get("rank"),
+            evidence=
+                candidate.get("evidence"),
+            vessel_type=
+                candidate.get("vessel_type"),
+            flag=
+                candidate.get("flag")
         )
 
         for candidate in candidates

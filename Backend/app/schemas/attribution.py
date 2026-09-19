@@ -20,6 +20,14 @@ class VesselScore(BaseModel):
 
     final_score: float
 
+    rank: int | None = None
+
+    evidence: dict | None = None
+
+    vessel_type: str | None = None
+
+    flag: str | None = None
+
 
 class AttributionResponse(BaseModel):
 

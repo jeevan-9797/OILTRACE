@@ -17,6 +17,7 @@ router = APIRouter(
 async def detect_oil_spill(
     image: UploadFile = File(...)
 ):
+    endpoint_started = time.perf_counter()
     logger.info(
         "[DETECT] request received: filename=%s, content_type=%s",
         getattr(image, "filename", None),
@@ -52,7 +53,7 @@ async def detect_oil_spill(
             len(image_bytes) if image_bytes else 0
         )
         logger.info(
-            "[TIMING] image read: %.3fs",
+            "[TIMING] image_load: %.2fs",
             time.perf_counter() - image_read_started,
         )
     except Exception as read_err:
@@ -74,7 +75,6 @@ async def detect_oil_spill(
         )
 
     try:
-        pipeline_started = time.perf_counter()
         result = detect_spill(
             image_bytes,
             image.filename
@@ -86,8 +86,8 @@ async def detect_oil_spill(
             image.filename
         )
         logger.info(
-            "[TIMING] detection endpoint: %.3fs",
-            time.perf_counter() - pipeline_started,
+            "[TIMING] total: %.2fs",
+            time.perf_counter() - endpoint_started,
         )
         return result
     except ValueError as e:

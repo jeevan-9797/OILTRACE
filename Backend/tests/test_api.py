@@ -18,6 +18,12 @@ from app.api.routes.attribution import (
 from app.api.routes.drift import (
     move_point,
     calculate_drift_step,
+    generate_drift_for_spill,
+    get_nearest_environment,
+    _select_nearest_environment,
+    ENVIRONMENT_COVERAGE_THRESHOLD_KM,
+    MODEL_SOURCE,
+    MODEL_SOURCE_DEGRADED,
 )
 from app.services.georeferencing.dartis import (
     pixel_to_geo,
@@ -529,4 +535,156 @@ def test_detect_oil_spill_pipeline_success(mock_supabase, mock_drift, mock_attr)
     assert "spills_created" in data
     assert "drift" in data
     assert "attribution" in data
+
+
+# =====================================================================
+# 5. P4 ENVIRONMENTAL COVERAGE & DEGRADED DRIFT STATUS
+# =====================================================================
+
+def test_environmental_coverage_classification():
+    """Verify normal vs degraded_outside_environment_coverage vs degraded_no_environment."""
+    sample_records = [
+        {
+            "id": "env-1",
+            "latitude": 18.92,
+            "longitude": 72.82,
+            "timestamp": "2026-08-22T10:00:00+00:00"
+        }
+    ]
+    ref_time = datetime(2026, 8, 22, 10, 0, 0, tzinfo=timezone.utc)
+
+    # Empty -> degraded_no_environment
+    rec, status, dist = _select_nearest_environment([], 18.92, 72.82, ref_time)
+    assert rec is None
+    assert status == "degraded_no_environment"
+    assert dist is None
+
+    # Within 100 km (e.g. 5 km away) -> normal
+    rec, status, dist = _select_nearest_environment(sample_records, 18.95, 72.85, ref_time)
+    assert rec is not None
+    assert status == "normal"
+    assert dist is not None and dist <= ENVIRONMENT_COVERAGE_THRESHOLD_KM
+
+    # Far away (> 100 km, e.g. Cyprus at 35.80, 34.45) -> degraded_outside_environment_coverage
+    rec, status, dist = _select_nearest_environment(sample_records, 35.80, 34.45, ref_time)
+    assert rec is None
+    assert status == "degraded_outside_environment_coverage"
+    assert dist is not None and dist > ENVIRONMENT_COVERAGE_THRESHOLD_KM
+
+
+def test_degraded_drift_step_stationary():
+    """calculate_drift_step falls back to stationary point with confidence 0.30 when degraded."""
+    sample_records = [
+        {
+            "id": "env-1",
+            "latitude": 18.92,
+            "longitude": 72.82,
+            "timestamp": "2026-08-22T10:00:00+00:00",
+            "wind_speed": 10.0,
+            "wind_direction": 180.0,
+            "current_speed": 2.0,
+            "current_direction": 90.0
+        }
+    ]
+    ref_time = datetime(2026, 8, 22, 10, 0, 0, tzinfo=timezone.utc)
+
+    # Distant point (Cyprus)
+    lat, lon, env, conf = calculate_drift_step(
+        35.80, 34.45, ref_time, 3.0, environment_records=sample_records
+    )
+    assert lat == 35.80
+    assert lon == 34.45
+    assert env is None
+    assert conf == 0.30
+
+
+def test_generate_drift_for_spill_degraded_details():
+    """generate_drift_for_spill returns coverage_details with degraded status when outside coverage."""
+    sample_records = [
+        {
+            "id": "env-1",
+            "latitude": 18.92,
+            "longitude": 72.82,
+            "timestamp": "2026-08-22T10:00:00+00:00"
+        }
+    ]
+    spill = {
+        "id": "uuid-test-degraded",
+        "spill_code": "SP-DEG-01",
+        "centroid_latitude": 35.80,
+        "centroid_longitude": 34.45,
+        "detected_at": "2026-08-22T10:00:00+00:00"
+    }
+    pts, status, details = generate_drift_for_spill(
+        "uuid-test-degraded",
+        spill_record=spill,
+        is_new_spill=True,
+        environment_records=sample_records,
+        save_to_db=False,
+        return_details=True
+    )
+    assert status == "degraded_outside_environment_coverage"
+    assert details["status"] == "degraded_outside_environment_coverage"
+    assert details["threshold_km"] == 100.0
+    assert details["nearest_station_distance_km"] > 100.0
+    assert len(pts) == 5
+    for p in pts:
+        assert p["latitude"] == 35.80
+        assert p["longitude"] == 34.45
+        assert p["confidence"] == 0.30
+        assert p["model_source"] == MODEL_SOURCE_DEGRADED
+
+
+@patch("app.api.routes.drift.supabase")
+def test_get_drift_endpoint_coverage_status(mock_supabase):
+    """GET /api/spills/{spill_id}/drift returns status and environmental_coverage."""
+    def table_side_effect(name):
+        m = MagicMock()
+        m.select.return_value = m
+        m.eq.return_value = m
+        m.limit.return_value = m
+        m.order.return_value = m
+        if name == "spills":
+            m.execute.return_value = MagicMock(data=[{
+                "id": "uuid-drift-test",
+                "spill_code": "SP-001",
+                "centroid_latitude": 35.80,
+                "centroid_longitude": 34.45,
+                "detected_at": "2026-08-22T10:00:00+00:00"
+            }])
+        elif name == "spill_drift_points":
+            m.execute.return_value = MagicMock(data=[
+                {
+                    "sequence_no": 1,
+                    "latitude": 35.80,
+                    "longitude": 34.45,
+                    "timestamp": "2026-08-22T10:00:00+00:00",
+                    "path_type": "origin"
+                },
+                {
+                    "sequence_no": 2,
+                    "latitude": 35.80,
+                    "longitude": 34.45,
+                    "timestamp": "2026-08-22T13:00:00+00:00",
+                    "path_type": "predicted"
+                }
+            ])
+        elif name == "weather_ocean_data":
+            m.execute.return_value = MagicMock(data=[{
+                "id": "env-1",
+                "timestamp": "2026-08-22T10:00:00+00:00",
+                "latitude": 18.92,
+                "longitude": 72.82
+            }])
+        return m
+
+    mock_supabase.table.side_effect = table_side_effect
+
+    resp = client.get("/api/spills/SP-001/drift")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["spill_id"] == "SP-001"
+    assert data["status"] == "degraded_outside_environment_coverage"
+    assert data["environmental_coverage"] is False
+    assert data["coverage_details"]["nearest_station_distance_km"] > 100.0
 

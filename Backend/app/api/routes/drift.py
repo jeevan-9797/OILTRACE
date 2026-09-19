@@ -32,6 +32,10 @@ PREDICTION_POINTS = 5
 STEP_HOURS = 3
 
 MODEL_SOURCE = "environmental-drift-v1"
+MODEL_SOURCE_DEGRADED = "environmental-drift-v1-degraded"
+
+# Maximum distance (km) to accept weather/ocean observation for drift modeling
+ENVIRONMENT_COVERAGE_THRESHOLD_KM = 100.0
 
 
 # =========================================================
@@ -52,6 +56,9 @@ class DriftResponse(BaseModel):
     origin: Coordinates
     historical_path: list[TrajectoryPoint]
     predicted_path: list[TrajectoryPoint]
+    status: str = "normal"
+    environmental_coverage: bool = True
+    coverage_details: dict | None = None
 
 
 # =========================================================
@@ -134,6 +141,36 @@ def move_point(
 
 
 # =========================================================
+# HAVERSINE DISTANCE
+# =========================================================
+
+def haversine_km(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float
+) -> float:
+    """Calculate the great circle distance between two points on Earth in km."""
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+
+    a = (
+        sin(dlat / 2) ** 2
+        +
+        cos(radians(lat1))
+        * cos(radians(lat2))
+        * sin(dlon / 2) ** 2
+    )
+
+    c = 2 * atan2(
+        sqrt(a),
+        sqrt(1 - a)
+    )
+
+    return EARTH_RADIUS_KM * c
+
+
+# =========================================================
 # FIND NEAREST ENVIRONMENTAL DATA
 # =========================================================
 
@@ -141,19 +178,30 @@ def _select_nearest_environment(
     records: list,
     latitude: float,
     longitude: float,
-    timestamp: datetime
+    timestamp: datetime,
+    max_distance_km: float = ENVIRONMENT_COVERAGE_THRESHOLD_KM
 ):
-    """Select the closest observation from an already-loaded snapshot."""
+    """
+    Select the closest observation from an already-loaded snapshot within max_distance_km.
+
+    Returns:
+        (best_record, status, min_distance_km)
+    """
 
     if not records:
-        return None
+        return None, "degraded_no_environment", None
 
     best_record = None
     best_score = float("inf")
+    min_distance_km = float("inf")
 
     for record in records:
         record_lat = float(record["latitude"])
         record_lon = float(record["longitude"])
+        dist_km = haversine_km(latitude, longitude, record_lat, record_lon)
+        if dist_km < min_distance_km:
+            min_distance_km = dist_km
+
         record_time = datetime.fromisoformat(
             str(record["timestamp"]).replace("Z", "+00:00")
         )
@@ -174,18 +222,24 @@ def _select_nearest_environment(
             best_score = score
             best_record = record
 
-    return best_record
+    if min_distance_km > max_distance_km:
+        return None, "degraded_outside_environment_coverage", min_distance_km
+
+    return best_record, "normal", min_distance_km
 
 
 def get_nearest_environment(
     latitude: float,
     longitude: float,
     timestamp: datetime,
-    records: list | None = None
+    records: list | None = None,
+    max_distance_km: float = ENVIRONMENT_COVERAGE_THRESHOLD_KM,
+    return_status: bool = False
 ):
     """
-    Find the closest weather/ocean observation
-    based on location and time.
+    Find the closest weather/ocean observation based on location and time.
+    If return_status is True, returns (best_record, status, min_distance_km).
+    If return_status is False, returns best_record (or None if degraded/unavailable).
     """
 
     if records is None:
@@ -202,12 +256,18 @@ def get_nearest_environment(
         )
         records = response.data or []
 
-    return _select_nearest_environment(
+    best_record, status, min_distance_km = _select_nearest_environment(
         records,
         latitude,
         longitude,
         timestamp,
+        max_distance_km=max_distance_km
     )
+
+    if return_status:
+        return best_record, status, min_distance_km
+
+    return best_record
 
 
 # =========================================================
@@ -422,7 +482,12 @@ def calculate_drift_step(
 # =========================================================
 
 def generate_drift_for_spill(
-    spill_id: str
+    spill_id: str,
+    spill_record: dict | None = None,
+    is_new_spill: bool = False,
+    environment_records: list | None = None,
+    save_to_db: bool = True,
+    return_details: bool = False
 ):
     """
     Generate environmental predictions for a spill.
@@ -439,28 +504,32 @@ def generate_drift_for_spill(
     # 1. GET SPILL
     # =====================================================
 
-    spill_response = (
-        supabase
-        .table("spills")
-        .select(
-            "id, spill_code, "
-            "centroid_latitude, "
-            "centroid_longitude, "
-            "detected_at, "
-            "estimated_origin_at"
-        )
-        .eq("id", spill_id)
-        .limit(1)
-        .execute()
-    )
-
-    if not spill_response.data:
-
-        raise ValueError(
-            f"Spill '{spill_id}' not found"
+    if spill_record:
+        # In-memory data reuse: use provided spill record to eliminate redundant Supabase SELECT
+        spill = spill_record
+    else:
+        spill_response = (
+            supabase
+            .table("spills")
+            .select(
+                "id, spill_code, "
+                "centroid_latitude, "
+                "centroid_longitude, "
+                "detected_at, "
+                "estimated_origin_at"
+            )
+            .eq("id", spill_id)
+            .limit(1)
+            .execute()
         )
 
-    spill = spill_response.data[0]
+        if not spill_response.data:
+
+            raise ValueError(
+                f"Spill '{spill_id}' not found"
+            )
+
+        spill = spill_response.data[0]
 
     spill_uuid = spill["id"]
 
@@ -468,37 +537,41 @@ def generate_drift_for_spill(
     # 2. GET EXISTING DRIFT POINTS
     # =====================================================
 
-    existing_response = (
-        supabase
-        .table("spill_drift_points")
-        .select(
-            "id, spill_id, sequence_no, "
-            "latitude, longitude, timestamp, "
-            "path_type, model_source, confidence"
+    if is_new_spill:
+        # In-memory data reuse: newly created spill has no existing drift points, skip Supabase SELECT
+        historical_points = []
+    else:
+        existing_response = (
+            supabase
+            .table("spill_drift_points")
+            .select(
+                "id, spill_id, sequence_no, "
+                "latitude, longitude, timestamp, "
+                "path_type, model_source, confidence"
+            )
+            .eq("spill_id", spill_uuid)
+            .order("timestamp")
+            .execute()
         )
-        .eq("spill_id", spill_uuid)
-        .order("timestamp")
-        .execute()
-    )
 
-    existing_points = (
-        existing_response.data or []
-    )
-
-    # =====================================================
-    # 3. KEEP ONLY ORIGIN + HISTORICAL
-    #
-    # Old predicted points are removed below.
-    # =====================================================
-
-    historical_points = [
-        point
-        for point in existing_points
-        if point["path_type"] in (
-            "origin",
-            "historical"
+        existing_points = (
+            existing_response.data or []
         )
-    ]
+
+        # =====================================================
+        # 3. KEEP ONLY ORIGIN + HISTORICAL
+        #
+        # Old predicted points are removed below.
+        # =====================================================
+
+        historical_points = [
+            point
+            for point in existing_points
+            if point["path_type"] in (
+                "origin",
+                "historical"
+            )
+        ]
 
     # =====================================================
     # 4. IF NO HISTORICAL DATA EXISTS
@@ -612,14 +685,18 @@ def generate_drift_for_spill(
     # Historical/origin points remain untouched.
     # =====================================================
 
-    (
-        supabase
-        .table("spill_drift_points")
-        .delete()
-        .eq("spill_id", spill_uuid)
-        .eq("path_type", "predicted")
-        .execute()
-    )
+    if not is_new_spill:
+        (
+            supabase
+            .table("spill_drift_points")
+            .delete()
+            .eq("spill_id", spill_uuid)
+            .eq("path_type", "predicted")
+            .execute()
+        )
+    else:
+        # In-memory data reuse: new spill has no previous predicted points, skip redundant Supabase DELETE
+        pass
 
     # =====================================================
     # 8. GENERATE NEW ENVIRONMENTAL PREDICTIONS
@@ -627,18 +704,53 @@ def generate_drift_for_spill(
 
     generated_points = []
 
-    environment_response = (
-        supabase
-        .table("weather_ocean_data")
-        .select(
-            "id, timestamp, latitude, longitude, "
-            "wind_speed, wind_direction, "
-            "current_speed, current_direction, "
-            "source, metadata"
+    if environment_records is None:
+        environment_response = (
+            supabase
+            .table("weather_ocean_data")
+            .select(
+                "id, timestamp, latitude, longitude, "
+                "wind_speed, wind_direction, "
+                "current_speed, current_direction, "
+                "source, metadata"
+            )
+            .execute()
         )
-        .execute()
+        environment_records = environment_response.data or []
+    else:
+        # Per-request shared data reuse: use pre-fetched weather observations
+        pass
+
+    # Check overall environmental coverage at spill origin
+    initial_env, overall_status, min_env_dist_km = get_nearest_environment(
+        current_latitude,
+        current_longitude,
+        current_time,
+        records=environment_records,
+        return_status=True
     )
-    environment_records = environment_response.data or []
+
+    coverage_details = {
+        "status": overall_status,
+        "threshold_km": ENVIRONMENT_COVERAGE_THRESHOLD_KM,
+        "nearest_station_distance_km": (
+            round(min_env_dist_km, 1) if min_env_dist_km is not None else None
+        ),
+        "reason": (
+            "Environmental data available within coverage threshold"
+            if overall_status == "normal"
+            else (
+                f"Nearest weather/ocean station is {round(min_env_dist_km, 1)} km away, "
+                f"exceeding the {ENVIRONMENT_COVERAGE_THRESHOLD_KM} km threshold"
+                if overall_status == "degraded_outside_environment_coverage"
+                else "No weather/ocean observations available in database"
+            )
+        )
+    }
+
+    point_model_source = (
+        MODEL_SOURCE if overall_status == "normal" else MODEL_SOURCE_DEGRADED
+    )
 
     for index in range(
         PREDICTION_POINTS
@@ -672,7 +784,7 @@ def generate_drift_for_spill(
                 "longitude": new_longitude,
                 "timestamp": current_time.isoformat(),
                 "path_type": "predicted",
-                "model_source": MODEL_SOURCE,
+                "model_source": point_model_source,
                 "confidence": confidence
             }
         )
@@ -687,24 +799,31 @@ def generate_drift_for_spill(
     # 9. INSERT NEW PREDICTIONS
     # =====================================================
 
+    result_points = []
     if generated_points:
 
-        insert_response = (
-            supabase
-            .table("spill_drift_points")
-            .insert(generated_points)
-            .execute()
-        )
-
-        if not insert_response.data:
-
-            raise RuntimeError(
-                "Failed to save drift predictions"
+        if not save_to_db:
+            result_points = generated_points
+        else:
+            insert_response = (
+                supabase
+                .table("spill_drift_points")
+                .insert(generated_points)
+                .execute()
             )
 
-        return insert_response.data
+            if not insert_response.data:
 
-    return []
+                raise RuntimeError(
+                    "Failed to save drift predictions"
+                )
+
+            result_points = insert_response.data
+
+    if return_details:
+        return result_points, overall_status, coverage_details
+
+    return result_points
 
 
 # =========================================================
@@ -850,12 +969,46 @@ def get_drift(
         )
 
     # =====================================================
-    # 6. RETURN RESPONSE
+    # 6. DETERMINE COVERAGE STATUS & RETURN RESPONSE
     # =====================================================
+
+    spill_time_raw = spill.get("estimated_origin_at") or spill.get("detected_at")
+    if spill_time_raw:
+        spill_time = datetime.fromisoformat(str(spill_time_raw).replace("Z", "+00:00"))
+    else:
+        spill_time = datetime.now(timezone.utc)
+    if spill_time.tzinfo is None:
+        spill_time = spill_time.replace(tzinfo=timezone.utc)
+
+    _, drift_status, min_env_dist = get_nearest_environment(
+        float(spill["centroid_latitude"]),
+        float(spill["centroid_longitude"]),
+        spill_time,
+        return_status=True
+    )
+
+    coverage_details = {
+        "status": drift_status,
+        "threshold_km": ENVIRONMENT_COVERAGE_THRESHOLD_KM,
+        "nearest_station_distance_km": round(min_env_dist, 1) if min_env_dist is not None else None,
+        "reason": (
+            "Environmental data available within coverage threshold"
+            if drift_status == "normal"
+            else (
+                f"Nearest weather/ocean station is {round(min_env_dist, 1)} km away, "
+                f"exceeding the {ENVIRONMENT_COVERAGE_THRESHOLD_KM} km threshold"
+                if drift_status == "degraded_outside_environment_coverage"
+                else "No weather/ocean observations available in database"
+            )
+        )
+    }
 
     return DriftResponse(
         spill_id=spill["spill_code"],
         origin=origin,
         historical_path=historical_path,
-        predicted_path=predicted_path
+        predicted_path=predicted_path,
+        status=drift_status,
+        environmental_coverage=(drift_status == "normal"),
+        coverage_details=coverage_details
     )

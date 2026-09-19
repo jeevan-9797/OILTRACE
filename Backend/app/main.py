@@ -9,7 +9,7 @@ from app.api.routes.vessels import router as vessels_router
 from app.api.routes.drift import router as drift_router
 from app.api.routes.health import router as health_router
 from app.api.routes import spill_details
-from app.services.ai.inference import get_model
+from app.services.ai.inference import get_model, warmup_model
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,10 +21,11 @@ logger = logging.getLogger("oiltrace.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Lightweight weights loading at startup without expensive prediction forward-passes
+    # Lightweight weights loading and warmup at startup to avoid cold-start latency on first user request
     try:
         get_model()
         logger.info("[STARTUP] YOLO model weights loaded into memory successfully.")
+        warmup_model()
     except Exception as e:
         logger.warning("[STARTUP] YOLO model pre-loading deferred: %s", e)
     yield
