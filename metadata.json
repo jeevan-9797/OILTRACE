@@ -1,0 +1,6 @@
+{
+  "name": "OILTRACE Spill Investigation",
+  "description": "Mission-control satellite oil-spill investigation tool with interactive geospatial telemetry, Sentinel-1 SAR analysis, vessel attribution, and drift forecasting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
