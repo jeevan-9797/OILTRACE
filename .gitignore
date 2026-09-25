@@ -1,4 +1,5 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
@@ -13,8 +14,11 @@ yolo_segmentation/
 node_modules/
 dist/
 build/
+coverage/
+.DS_Store
 .cache/
 .env*
+!.env.example
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
@@ -23,6 +27,7 @@ logs/
 *.log
 .claude-replay.*
 .tmp-*
+evaluation/
 
 # Platform-managed agentplat state, not project source. In the
 # client-initiated single-repo workspace layout (make's `Path: "."` spec) the

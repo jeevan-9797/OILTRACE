@@ -49,9 +49,9 @@ def get_vessels(
     positions_response = (
         supabase
         .table("vessel_positions")
-            .select(
-                "mmsi, latitude, longitude, speed_knots, heading_deg, timestamp"
-            )
+        .select(
+            "mmsi, latitude, longitude, speed_knots, heading_deg, timestamp"
+        )
         .order("timestamp", desc=True)
         .execute()
     )
@@ -85,3 +85,47 @@ def get_vessels(
         )
 
     return result
+
+
+@router.get("/vessels/{mmsi}")
+def get_vessel_details(
+    mmsi: str = Path(
+        ...,
+        description="The 9-digit MMSI of the vessel",
+        examples=["211234567"]
+    )
+):
+    try:
+        mmsi_val = int(mmsi)
+    except ValueError:
+        mmsi_val = mmsi
+
+    vessel_resp = (
+        supabase
+        .table("vessels")
+        .select("mmsi, name, imo_number, vessel_type, flag, length_m, width_m")
+        .eq("mmsi", mmsi_val)
+        .limit(1)
+        .execute()
+    )
+
+    positions_resp = (
+        supabase
+        .table("vessel_positions")
+        .select("latitude, longitude, speed_knots, heading_deg, timestamp")
+        .eq("mmsi", mmsi_val)
+        .order("timestamp", desc=False)
+        .execute()
+    )
+
+    vessel_info = vessel_resp.data[0] if vessel_resp.data else {}
+    return {
+        "mmsi": str(mmsi),
+        "name": vessel_info.get("name") or "UNKNOWN VESSEL",
+        "imo_number": vessel_info.get("imo_number"),
+        "vessel_type": vessel_info.get("vessel_type"),
+        "flag": vessel_info.get("flag"),
+        "length_m": vessel_info.get("length_m"),
+        "width_m": vessel_info.get("width_m"),
+        "positions": positions_resp.data or []
+    }
