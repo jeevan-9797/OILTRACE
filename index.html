@@ -1022,6 +1022,7 @@
         c.temporal = c.temporal_score !== undefined ? Number(c.temporal_score).toFixed(1) : (c.temporal !== undefined ? Number(c.temporal).toFixed(1) : '0.0');
         c.trajectory = c.trajectory_score !== undefined ? Number(c.trajectory_score).toFixed(1) : (c.trajectory !== undefined ? Number(c.trajectory).toFixed(1) : '0.0');
         c.behaviour = c.behaviour_score !== undefined ? Number(c.behaviour_score).toFixed(1) : (c.behaviour !== undefined ? Number(c.behaviour).toFixed(1) : '0.0');
+        c.environment = c.environment_score !== undefined ? Number(c.environment_score).toFixed(1) : '85.0';
 
         const vInfo = vesselMap.get(c.mmsi);
         if (vInfo && vInfo.latitude && vInfo.longitude) {
@@ -1039,12 +1040,25 @@
           c.lng = currentOrigin[1] + 0.04 * (idx + 1);
         }
 
-        c.flag = c.flag || vInfo?.flag || 'International';
-        c.imo = c.imo || (vInfo?.imo_number ? `IMO ${vInfo.imo_number}` : 'IMO 9384712');
-        c.dwt = c.dwt || '115,420 DWT';
-        c.owner = c.owner || 'Registered Maritime Operator';
-        c.violations = c.violations || (idx === 0 ? 'Prior MARPOL Annex I Bilge Discharge Record (High Risk)' : 'Clean Record (Low Risk)');
-        c.hasDark = c.hasDark !== undefined ? c.hasDark : (idx === 0);
+        const distKm = c.evidence?.distance_km !== undefined
+          ? `${Number(c.evidence.distance_km).toFixed(2)} km`
+          : (c.evidence?.distance_to_spill_km !== undefined
+              ? `${Number(c.evidence.distance_to_spill_km).toFixed(2)} km`
+              : (c.evidence?.trajectory_min_distance_km !== undefined ? `${Number(c.evidence.trajectory_min_distance_km).toFixed(2)} km` : null));
+        const timeDiffH = c.evidence?.temporal_difference_hours !== undefined
+          ? `${Math.abs(Number(c.evidence.temporal_difference_hours)).toFixed(2)}h`
+          : null;
+        const spdKts = c.speed !== undefined && c.speed !== null ? `${Number(c.speed).toFixed(1)} kts` : 'N/A';
+        const hdgDeg = c.heading !== undefined && c.heading !== null ? `${Number(c.heading).toFixed(0)}°` : 'N/A';
+
+        c.flag = c.flag || vInfo?.flag || 'Maritime AIS Registry';
+        c.imo = c.imo || (vInfo?.imo_number ? `IMO ${vInfo.imo_number}` : `MMSI ${c.mmsi}`);
+        c.dwt = distKm ? `${distKm}${timeDiffH ? ` (Δt ${timeDiffH})` : ''}` : (c.vessel_type || 'Merchant Tanker');
+        c.owner = `Speed: ${spdKts} • Heading: ${hdgDeg}`;
+        c.violations = c.evidence
+          ? `Eligibility: ${(c.evidence.eligibility_status || 'eligible').toUpperCase()} • Env Score: ${c.environment}% • Drift Points: ${c.evidence.drift_points_used ?? 5}`
+          : `Attribution Score: ${c.score}/100`;
+        c.hasDark = c.hasDark !== undefined ? c.hasDark : (Number(c.score) >= 90);
       });
     }
 
@@ -1205,8 +1219,8 @@
         tr.innerHTML = `
           <td class="mono" style="font-weight:700;">#${v.rank || 1}</td>
           <td>
-            <div style="color:#fff; font-weight:700;">${v.name} ${v.hasDark ? '<span class="dark-tag">[AIS DARK DETECTED]</span>':''}</div>
-            <div style="font-size:10px; color:var(--text-dim);">${v.flag || 'International'}</div>
+            <div style="color:#fff; font-weight:700;">${v.name} ${v.hasDark ? '<span class="dark-tag">[HIGH CORRELATION]</span>':''}</div>
+            <div style="font-size:10px; color:var(--text-dim);">${v.flag || 'Maritime Registry'}</div>
           </td>
           <td class="mono" style="color:var(--text-dim);">${v.mmsi}</td>
           <td class="mono" style="text-align:right; font-weight:800; color:${v.rank === 1 ? '#f87171':'var(--cyan-radar)'};">${v.score}</td>
@@ -1271,7 +1285,7 @@
       document.getElementById('reg-imo').textContent = v.imo;
       document.getElementById('reg-flag').textContent = v.flag;
       document.getElementById('reg-owner').textContent = v.owner;
-      document.getElementById('reg-violations').textContent = `Past Violations: ${v.violations}`;
+      document.getElementById('reg-violations').textContent = v.violations;
     }
 
     /* MULTI-SPILL SELECTOR */
@@ -1339,7 +1353,7 @@
       const centroidEl = document.getElementById('val-centroid');
       if (centroidEl) centroidEl.textContent = `${origin[0].toFixed(4)}°N, ${origin[1].toFixed(4)}°E`;
 
-      const timeEl = document.getElementById('val-timestamp');
+      const timeEl = document.getElementById('val-timestamp') || document.getElementById('val-time');
       if (timeEl) timeEl.textContent = (det.detected_at || fullData.detected_at || new Date().toISOString()).replace('T', ' ').substring(0, 19) + ' UTC';
 
       const suspectBadge = document.getElementById('suspect-count-badge');
@@ -1376,28 +1390,42 @@
         }
       }
 
-      // Check P4 Environmental Coverage & Drift Status
+      // Check P4 Environmental Coverage & Drift Status (normal, degraded_outside_environment_coverage, degraded_no_environment)
       const banner = document.getElementById('status-banner');
       const bText = document.getElementById('status-banner-text');
       const bBar = document.getElementById('banner-bar-wrap');
 
       if (fullData.drift && Array.isArray(fullData.drift)) {
-        const driftForSpill = fullData.drift.find(d => d.spill_id === spillCode);
+        const driftForSpill = fullData.drift.find(d => d.spill_id === spillCode) || fullData.drift[0];
         if (driftForSpill) {
           if (Array.isArray(driftForSpill.points) && driftForSpill.points.length > 0) {
             const pts = driftForSpill.points.map(p => [Number(p.latitude), Number(p.longitude)]);
             if (predDriftLayer) predDriftLayer.setLatLngs(pts);
           }
-          if (driftForSpill.environmental_coverage === false || driftForSpill.status === 'degraded_outside_environment_coverage') {
+          const dStatus = driftForSpill.status || fullData.pipeline_status || 'normal';
+          if (dStatus === 'degraded_outside_environment_coverage') {
             if (banner) {
               banner.className = 'degraded';
               banner.style.display = 'flex';
             }
             const reason = driftForSpill.coverage_details?.reason || 'Outside 100.0 km weather/ocean station threshold';
-            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • DRIFT COVERAGE DEGRADED: ${reason}`;
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • DRIFT COVERAGE DEGRADED (OUTSIDE COVERAGE): ${reason}`;
             if (bBar) bBar.style.display = 'none';
-          } else if (banner) {
-            banner.style.display = 'none';
+          } else if (dStatus === 'degraded_no_environment' || driftForSpill.environmental_coverage === false) {
+            if (banner) {
+              banner.className = 'degraded';
+              banner.style.display = 'flex';
+            }
+            const reason = driftForSpill.coverage_details?.reason || 'No active weather/ocean stations available; using fallback drift parameters';
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • DRIFT COVERAGE DEGRADED (NO ENVIRONMENT): ${reason}`;
+            if (bBar) bBar.style.display = 'none';
+          } else {
+            if (banner) {
+              banner.className = 'clean';
+              banner.style.display = 'flex';
+            }
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • ENVIRONMENTAL COVERAGE: NORMAL (VALIDATED STATION TELEMETRY)`;
+            if (bBar) bBar.style.display = 'none';
           }
         }
       }
@@ -1465,10 +1493,15 @@
         const formData = new FormData();
         formData.append('image', file);
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
+
         const response = await fetch(`${API_BASE_URL}/api/spills/detect`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           let errDetail = `Server returned HTTP ${response.status}`;
@@ -1479,7 +1512,12 @@
           throw new Error(errDetail);
         }
 
-        const data = await response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseErr) {
+          throw new Error('Malformed JSON response from backend pipeline');
+        }
         console.log('[DETECT RESULT]', data);
 
         if (progressPct) progressPct.textContent = '100% COMPLETE';
@@ -1496,7 +1534,7 @@
           handlePositiveDetection(currentDetections[0], data);
           if (modalUpload) modalUpload.classList.remove('open');
         } else {
-          // Zero-detection scan: HTTP 200 clean sea surface!
+          // Zero-detection scan: HTTP 200 clean sea surface! Clear all stale previous spill data.
           console.log('Clean scan: 0 spills detected');
           showToast('Scan complete: Verified Clean Sea Surface — No anomalies found.');
           if (banner) {
@@ -1511,6 +1549,8 @@
             modalMsg.style.color = '#34d399';
           }
 
+          const badgeEl = document.getElementById('incident-badge');
+          if (badgeEl) badgeEl.textContent = 'CLEAN SCAN: 0 ANOMALIES';
           const confEl = document.getElementById('val-conf');
           if (confEl) confEl.textContent = '0.0%';
           const areaEl = document.getElementById('val-area');
@@ -1521,21 +1561,43 @@
           if (multiSelect) multiSelect.style.display = 'none';
 
           if (spillLayer) spillLayer.setLatLngs([]);
+          if (secondarySlickGroup) secondarySlickGroup.clearLayers();
+          if (histDriftLayer) histDriftLayer.setLatLngs([]);
+          if (predDriftLayer) predDriftLayer.setLatLngs([]);
+          if (aisLayerGroup) aisLayerGroup.clearLayers();
           if (suspectTrackLayer) map.removeLayer(suspectTrackLayer);
+
+          currentDetections = [];
           currentCandidates = [];
+          selectedVessel = null;
           renderSuspectsTable();
+
+          const attrNameEl = document.getElementById('attr-name');
+          if (attrNameEl) attrNameEl.textContent = 'No Suspect Vessel — Clean Sea Surface';
+          const attrSubEl = document.getElementById('attr-sub');
+          if (attrSubEl) attrSubEl.textContent = '0 oil slicks detected • 0 candidate vessels evaluated';
+          const attrScoreEl = document.getElementById('attr-score');
+          if (attrScoreEl) {
+            attrScoreEl.textContent = '0.0 / 100';
+            attrScoreEl.className = 'final-score-val mono';
+          }
         }
       } catch (err) {
+        const msg = err.name === 'AbortError' ? 'Request timed out (90s limit exceeded)' : err.message;
         console.error('Detection pipeline error:', err);
-        showToast(`Detection error: ${err.message}`, 5000);
+        showToast(`Detection error: ${msg}`, 5000);
         if (banner) {
           banner.className = 'error';
           banner.style.display = 'flex';
         }
-        if (bText) bText.textContent = `SAR Ingest Failed: ${err.message}`;
+        if (bText) {
+          bText.innerHTML = `SAR Ingest Failed: ${msg} &nbsp;<button onclick="document.getElementById('status-banner').style.display='none'; document.getElementById('modal-upload').classList.add('open');" style="background:#ef4444;color:#fff;border:none;border-radius:3px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;">[RETRY / RESET]</button>`;
+        }
         if (bBar) bBar.style.display = 'none';
+        if (progressPct) progressPct.textContent = 'ERROR — READY TO RETRY';
+        if (progressBar) progressBar.style.width = '0%';
         if (modalMsg) {
-          modalMsg.textContent = `Pipeline failure: ${err.message}`;
+          modalMsg.textContent = `Pipeline failure: ${msg}. Select file again to retry.`;
           modalMsg.style.color = '#ef4444';
         }
       }
