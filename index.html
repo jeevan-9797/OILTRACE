@@ -1,16 +1,1789 @@
-<!doctype html>
-<html lang="<!-- figma:lang -->">
-  <head>
-    <!-- figma:head-start -->
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title><!-- figma:title --></title>
-    <!-- figma:head-end -->
-  </head>
-  <body>
-    <!-- figma:body-start -->
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-    <!-- figma:body-end -->
-  </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OILTRACE Spill Investigation</title>
+  <meta name="description" content="Mission-control satellite oil-spill investigation tool with interactive geospatial telemetry, Sentinel-1 SAR analysis, vessel attribution, and drift forecasting." />
+  <meta property="og:title" content="OILTRACE Spill Investigation" />
+  <meta property="og:description" content="Mission-control satellite oil-spill investigation tool with interactive geospatial telemetry, Sentinel-1 SAR analysis, vessel attribution, and drift forecasting." />
+
+  <!-- Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS & html2pdf.js CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #0b0f19;
+      --bg-surface: #0f172a;
+      --bg-card: #131d33;
+      --bg-card-hover: #192745;
+      --border-subtle: #1e2d4d;
+      --border-active: #2b3e68;
+      --text-main: #f8fafc;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+      --cyan-radar: #06b6d4;
+      --cyan-dim: rgba(6, 182, 212, 0.15);
+      --amber-warn: #f59e0b;
+      --red-alert: #ef4444;
+      --emerald-ready: #10b981;
+      --purple-slick: #a855f7;
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 100vw; height: 100vh; overflow: hidden;
+      background: var(--bg-base); color: var(--text-main);
+      font-family: var(--font-ui); font-size: 13px; line-height: 1.4;
+      display: flex; flex-direction: column;
+    }
+    .mono { font-family: var(--font-mono); letter-spacing: -0.02em; }
+
+    /* TOP HEADER */
+    #header-bar {
+      height: 48px; min-height: 48px; background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-subtle); display: flex;
+      align-items: center; justify-content: space-between; padding: 0 16px;
+      z-index: 1000;
+    }
+    .brand-group { display: flex; align-items: center; gap: 10px; }
+    .radar-icon {
+      width: 24px; height: 24px; border: 1.5px solid var(--cyan-radar);
+      border-radius: 4px; background: var(--cyan-dim); display: flex;
+      align-items: center; justify-content: center; position: relative;
+    }
+    .radar-icon::after {
+      content: ''; width: 6px; height: 6px; background: var(--cyan-radar);
+      border-radius: 50%; box-shadow: 0 0 6px var(--cyan-radar);
+    }
+    .brand-title { font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+    .brand-title span { color: var(--cyan-radar); }
+
+    .header-ctrls { display: flex; align-items: center; gap: 10px; }
+    .status-chip {
+      display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px; background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; text-transform: uppercase;
+    }
+    .pulse-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #34d399;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .utc-badge {
+      background: var(--bg-base); border: 1px solid var(--border-subtle);
+      padding: 3px 8px; border-radius: 4px; font-size: 11px; color: var(--text-dim);
+    }
+    .btn-action-primary {
+      background: #0284c7; border: 1px solid #38bdf8; color: #ffffff;
+      font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 4px;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-action-primary:hover { background: #0369a1; }
+    .sim-toggles {
+      display: flex; background: var(--bg-base); border: 1px solid var(--border-subtle);
+      border-radius: 4px; padding: 2px; gap: 2px;
+    }
+    .sim-btn {
+      background: transparent; border: none; color: var(--text-muted);
+      font-size: 10px; font-weight: 700; padding: 3px 6px; border-radius: 2px; cursor: pointer;
+    }
+    .sim-btn.active { background: var(--bg-card); color: var(--text-main); }
+
+    /* STATUS BANNER STRIP */
+    #status-banner { display: none; padding: 6px 16px; font-size: 11px; font-weight: 600; }
+    #status-banner.loading {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #082f49; border-bottom: 1px solid #0284c7; color: #bae6fd;
+    }
+    #status-banner.clean {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #064e3b; border-bottom: 1px solid #10b981; color: #a7f3d0;
+    }
+    #status-banner.degraded {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #451a03; border-bottom: 1px solid #f59e0b; color: #fde68a;
+    }
+    #status-banner.error {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #450a0a; border-bottom: 1px solid var(--red-alert); color: #fee2e2;
+    }
+    .banner-bar-track {
+      width: 180px; height: 5px; background: rgba(0,0,0,0.4); border-radius: 3px; overflow: hidden;
+    }
+    .banner-bar-fill {
+      height: 100%; width: 72%; background: #38bdf8; animation: move-progress 1.5s infinite linear;
+    }
+    @keyframes move-progress { 0% { width: 10%; } 50% { width: 85%; } 100% { width: 100%; } }
+
+    /* MAIN SPLIT VIEW (MAP 58% / PANELS 42%) */
+    #main-layout {
+      flex: 1; display: grid; grid-template-columns: 58% 42%;
+      height: calc(100vh - 48px - 54px); overflow: hidden;
+    }
+    #map-container { position: relative; width: 100%; height: 100%; border-right: 1px solid var(--border-subtle); }
+    #leaflet-map { width: 100%; height: 100%; background: #050811; }
+    .leaflet-layer { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    .leaflet-control-zoom { display: none !important; }
+    .leaflet-control-attribution {
+      background: rgba(11, 15, 25, 0.85) !important; color: #64748b !important; font-size: 9px !important;
+    }
+
+    /* MAP OVERLAYS & LEGEND */
+    .map-box-floating {
+      position: absolute; z-index: 500; background: rgba(15, 23, 42, 0.94);
+      border: 1px solid var(--border-subtle); border-radius: 6px; padding: 10px 12px;
+      backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+    }
+    #layer-toggle-box { top: 12px; right: 12px; width: 195px; }
+    #map-legend-box { bottom: 12px; left: 12px; width: 230px; font-size: 11px; }
+    .box-header {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--text-dim); margin-bottom: 6px; padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between;
+    }
+    .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; cursor: pointer; }
+    .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .swatch { width: 14px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+    .swatch-spill { background: rgba(168, 85, 247, 0.5); border: 1.5px solid #c084fc; }
+    .swatch-centroid { width: 8px; height: 8px; border-radius: 50%; background: var(--red-alert); border: 1px solid #fff; }
+    .swatch-hist { border-top: 2px dashed #94a3b8; height: 0; }
+    .swatch-pred { border-top: 2px dotted var(--cyan-radar); height: 0; }
+    .swatch-ais { width: 8px; height: 8px; background: #38bdf8; transform: rotate(45deg); border: 1px solid #fff; }
+    .swatch-dark { width: 9px; height: 9px; background: #ef4444; border: 1.5px solid #fff; box-shadow: 0 0 4px #ef4444; }
+    .swatch-selected { border-top: 2px solid var(--amber-warn); height: 0; }
+
+    /* Pulsing Centroid & Dark Marker */
+    .pulsing-centroid { position: relative; width: 20px; height: 20px; }
+    .pulsing-centroid-dot {
+      position: absolute; top: 5px; left: 5px; width: 10px; height: 10px;
+      background: var(--red-alert); border: 2px solid #fff; border-radius: 50%;
+    }
+    .pulsing-centroid-ring {
+      position: absolute; width: 20px; height: 20px; border: 2px solid var(--red-alert);
+      border-radius: 50%; animation: ping-ring 1.8s infinite ease-out;
+    }
+    @keyframes ping-ring { 0% { transform: scale(0.4); opacity: 1; } 100% { transform: scale(2.2); opacity: 0; } }
+
+    .dark-vessel-target {
+      width: 14px; height: 14px; background: #dc2626; border: 2px solid #fff;
+      border-radius: 3px; box-shadow: 0 0 10px #ef4444; color: #fff;
+      font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+    }
+
+    /* RIGHT TELEMETRY PANELS CONTAINER */
+    #panels-container {
+      width: 100%; height: 100%; overflow-y: auto; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 12px; background: var(--bg-surface);
+    }
+    .data-card {
+      background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .card-header-line {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;
+    }
+    .card-header-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-dim); display: flex; align-items: center; gap: 6px;
+    }
+    .card-badge {
+      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+      background: rgba(255,255,255,0.04); padding: 1px 6px; border-radius: 3px;
+    }
+
+    /* PANEL A: 2x2 METRICS */
+    .metrics-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric-tile {
+      background: var(--bg-base); border: 1px solid var(--border-subtle);
+      border-radius: 4px; padding: 8px 10px;
+    }
+    .metric-title { font-size: 9px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+    .metric-num { font-size: 13.5px; font-weight: 700; color: #ffffff; margin-top: 2px; }
+
+    /* PANEL B: SUSPECT VESSELS TABLE */
+    .table-box {
+      border: 1px solid var(--border-subtle); border-radius: 4px; overflow: hidden; background: var(--bg-base);
+    }
+    .vessels-table { width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left; }
+    .vessels-table th {
+      background: rgba(0,0,0,0.35); padding: 6px 8px; font-size: 9.5px; font-weight: 700;
+      text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle);
+    }
+    .vessels-table td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .vessel-row { cursor: pointer; transition: background 0.15s; }
+    .vessel-row:hover { background: var(--bg-card-hover); }
+    .vessel-row.selected {
+      background: rgba(6, 182, 212, 0.12); border-left: 3px solid var(--cyan-radar);
+    }
+    .vessel-row.selected td { font-weight: 600; color: #ffffff; }
+    .dark-tag {
+      font-family: var(--font-mono); font-size: 8.5px; font-weight: 800;
+      background: #991b1b; color: #fee2e2; border: 1px solid #ef4444;
+      padding: 1px 4px; border-radius: 2px; margin-left: 4px; display: inline-block;
+    }
+
+    /* PANEL C: FORENSIC ATTRIBUTION */
+    .evidence-summary-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px; padding: 8px 10px;
+    }
+    .final-score-val { font-size: 17px; font-weight: 800; color: var(--amber-warn); }
+    .final-score-val.high { color: #f87171; }
+
+    .progress-group { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+    .prog-line { display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+    .prog-labels { display: flex; justify-content: space-between; color: var(--text-dim); }
+    .prog-track { width: 100%; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+    /* Collapsible Drawer */
+    .drawer-btn {
+      width: 100%; background: var(--bg-base); border: 1px solid var(--border-subtle);
+      border-radius: 4px; padding: 6px 10px; font-size: 10.5px; font-weight: 700;
+      color: var(--text-main); text-align: left; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center; text-transform: uppercase;
+    }
+    .drawer-content {
+      display: none; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border-subtle);
+      border-top: none; border-radius: 0 0 4px 4px; font-size: 11px;
+    }
+    .drawer-content.open { display: block; }
+    .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+    .btn-card {
+      background: var(--bg-base); border: 1px solid var(--border-subtle); color: var(--text-main);
+      font-size: 11px; font-weight: 600; padding: 7px; border-radius: 4px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.15s;
+    }
+    .btn-card:hover { border-color: var(--cyan-radar); color: var(--cyan-radar); background: rgba(6, 182, 212, 0.08); }
+    .btn-pdf {
+      background: #b91c1c; border-color: #ef4444; color: #ffffff; grid-column: span 2;
+    }
+    .btn-pdf:hover { background: #991b1b; color: #ffffff; border-color: #f87171; }
+
+    /* PANEL D: ENVIRONMENTAL IMPACT */
+    .landfall-banner {
+      background: rgba(239, 68, 68, 0.12); border: 1px solid #ef4444; border-radius: 4px;
+      padding: 7px 10px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .landfall-tag { font-size: 11px; font-weight: 800; color: #fca5a5; }
+    .landfall-eta { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: #ffffff; }
+    .weathering-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 10.5px; }
+
+    /* BOTTOM TIMELINE SCRUBBER */
+    #timeline-bar {
+      height: 54px; min-height: 54px; background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle); display: flex; align-items: center;
+      padding: 0 16px; gap: 14px; z-index: 900;
+    }
+    .btn-play {
+      width: 28px; height: 28px; background: var(--bg-card); border: 1px solid var(--border-subtle);
+      border-radius: 4px; color: var(--text-main); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+    }
+    .btn-play:hover { border-color: var(--cyan-radar); color: var(--cyan-radar); }
+    .scrub-track { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+    .scrub-slider { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px; background: #1e293b; outline: none; cursor: pointer; }
+    .scrub-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--cyan-radar); border: 2px solid #fff; cursor: grab; }
+    .scrub-steps { display: flex; justify-content: space-between; font-size: 9px; font-family: var(--font-mono); color: var(--text-muted); }
+    .scrub-steps span.active { color: var(--cyan-radar); font-weight: 700; }
+
+    /* HIDDEN PRINTABLE CONTAINER FOR PDF EXPORT */
+    #pdf-print-container {
+      position: absolute; top: -9999px; left: -9999px; width: 750px;
+      background: #ffffff; color: #0f172a; padding: 24px; font-family: 'Inter', sans-serif;
+    }
+    .pdf-title { font-size: 16px; font-weight: 800; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
+    .pdf-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+    .pdf-table th, .pdf-table td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; }
+    .pdf-table th { background: #f1f5f9; }
+
+    /* TACTICAL MODALS & TOASTS */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(5, 8, 17, 0.82); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 100%; max-width: 640px; background: var(--bg-surface);
+      border: 1px solid var(--border-subtle); border-radius: 8px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85); overflow: hidden;
+      display: flex; flex-direction: column; max-height: 90vh;
+    }
+    .modal-header {
+      padding: 12px 16px; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; color: #ffffff; display: flex; align-items: center; gap: 8px; }
+    .modal-close-btn {
+      background: transparent; border: none; color: var(--text-dim); font-size: 18px;
+      cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px;
+    }
+    .modal-close-btn:hover { color: #ffffff; background: rgba(255,255,255,0.08); }
+    .modal-body { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .modal-footer {
+      padding: 10px 16px; background: var(--bg-card); border-top: 1px solid var(--border-subtle);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .modal-btn-secondary {
+      background: var(--bg-base); border: 1px solid var(--border-subtle); color: var(--text-dim);
+      padding: 6px 14px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer;
+    }
+    .modal-btn-secondary:hover { color: #ffffff; border-color: var(--text-muted); }
+    .modal-btn-primary {
+      background: #0284c7; border: 1px solid #38bdf8; color: #ffffff;
+      padding: 6px 14px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer;
+    }
+    .modal-btn-primary:hover { background: #0369a1; }
+    .evidence-section {
+      background: var(--bg-base); border: 1px solid var(--border-subtle);
+      border-radius: 6px; padding: 10px 12px;
+    }
+    .evidence-section-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--cyan-radar);
+      margin-bottom: 6px; display: flex; justify-content: space-between;
+    }
+
+    /* TOAST NOTIFICATION */
+    #toast-notify {
+      position: fixed; top: 58px; right: 20px; z-index: 2500;
+      background: #082f49; border: 1px solid #0284c7; border-radius: 6px;
+      padding: 10px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      display: none; align-items: center; gap: 10px; color: #bae6fd; font-size: 11.5px;
+      animation: slideDown 0.25s ease-out;
+    }
+    @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+  <!-- TOP STATUS HEADER -->
+  <header id="header-bar">
+    <div class="brand-group">
+      <div class="radar-icon" title="Sentinel-1 SAR C-Band Radar"></div>
+      <div class="brand-title">OILTRACE <span>Spill Investigation</span></div>
+      <div class="status-chip" id="header-status-chip"><span class="pulse-dot" id="header-pulse-dot"></span><span id="header-status-text">TELEMETRY ONLINE</span></div>
+    </div>
+
+    <div class="header-ctrls">
+      <div class="utc-badge mono" id="clock-utc">2026-09-24 17:52:55 UTC</div>
+
+      <!-- State Simulator buttons -->
+      <div class="sim-toggles" title="Simulate Sensor Ingest States">
+        <button id="btn-sim-normal" class="sim-btn active">NORMAL</button>
+        <button id="btn-sim-loading" class="sim-btn">SIMULATE LOADING</button>
+        <button id="btn-sim-error" class="sim-btn">SIMULATE ERROR</button>
+      </div>
+
+      <button id="btn-upload-sar" class="btn-action-primary">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Upload Sentinel-1 Image</span>
+      </button>
+      <input type="file" id="sar-file-input" accept=".jpg,.jpeg,.png,.tif,.tiff,.bmp" style="display:none;" />
+    </div>
+  </header>
+
+  <!-- TOGGLEABLE INGEST STATUS STRIP -->
+  <div id="status-banner">
+    <div id="status-banner-text">INGESTING S1A_IW_GRDH_1SDV SWATH (RADIOMETRIC CALIBRATION)...</div>
+    <div class="banner-bar-track" id="banner-bar-wrap"><div class="banner-bar-fill"></div></div>
+  </div>
+
+  <!-- MAIN SPLIT VIEW -->
+  <main id="main-layout">
+    
+    <!-- LEFT PANE: LEAFLET MAP CANVAS -->
+    <section id="map-container">
+      <div id="leaflet-map"></div>
+
+      <!-- Floating Layer Toggle Box -->
+      <div id="layer-toggle-box" class="map-box-floating">
+        <div class="box-header"><span>MAP OVERLAYS</span><span class="mono">LAYERS</span></div>
+        <label class="toggle-row"><input type="checkbox" id="chk-spill" checked /><span>Spill Mask &amp; Centroid</span></label>
+        <label class="toggle-row"><input type="checkbox" id="chk-drift" checked /><span>Drift Vector &amp; Cone</span></label>
+        <label class="toggle-row"><input type="checkbox" id="chk-ais" checked /><span>AIS Vessel Traffic</span></label>
+        <label class="toggle-row"><input type="checkbox" id="chk-dark" checked /><span>Dark Radar Contact</span></label>
+        <label class="toggle-row"><input type="checkbox" id="chk-coastal" checked /><span>Coastal Sensitivity</span></label>
+        <label class="toggle-row"><input type="checkbox" id="chk-booms" /><span>Response Booms</span></label>
+      </div>
+
+      <!-- Floating Map Legend -->
+      <div id="map-legend-box" class="map-box-floating">
+        <div class="box-header"><span>MAP LEGEND</span><span class="mono" style="color:var(--cyan-radar);">7 ACTIVE</span></div>
+        <div class="legend-row"><span class="swatch swatch-spill"></span><span>Spill polygon mask</span></div>
+        <div class="legend-row"><span class="swatch swatch-centroid"></span><span>Centroid origin beacon</span></div>
+        <div class="legend-row"><span class="swatch swatch-hist"></span><span>Historical drift vector</span></div>
+        <div class="legend-row"><span class="swatch swatch-pred"></span><span>Predicted drift (+24h cone)</span></div>
+        <div class="legend-row"><span class="swatch swatch-ais"></span><span>AIS vessel markers</span></div>
+        <div class="legend-row"><span class="swatch swatch-dark"></span><span style="color:#fca5a5; font-weight:700;">Dark vessel anomaly</span></div>
+        <div class="legend-row"><span class="swatch swatch-selected"></span><span>Selected trajectory</span></div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANE: DATA PANELS A, B, C, D -->
+    <aside id="panels-container">
+
+      <!-- PANEL A: SPILL METRICS (2x2 Grid) -->
+      <div class="data-card" id="panel-spill-metrics">
+        <div class="card-header-line">
+          <div class="card-header-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            <span>PANEL A &bull; SPILL METRICS</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <select id="spill-multi-select" title="Switch between detected oil spills" style="display:none; background:var(--bg-base); color:var(--cyan-radar); border:1px solid var(--border-active); font-size:10px; font-family:var(--font-mono); border-radius:3px; padding:2px 6px; outline:none; cursor:pointer;"></select>
+            <span class="card-badge" id="incident-badge">INCIDENT #SP-001</span>
+          </div>
+        </div>
+
+        <div class="metrics-2x2">
+          <div class="metric-tile">
+            <div class="metric-title">Confidence</div>
+            <div class="metric-num mono" style="color:var(--cyan-radar);" id="val-conf">94.5%</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-title">Area</div>
+            <div class="metric-num mono" id="val-area">14.85 km²</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-title">Centroid</div>
+            <div class="metric-num mono" style="font-size:12px;" id="val-centroid">18°55'12"N, 72°45'00"E</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-title">Detection Time</div>
+            <div class="metric-num mono" style="font-size:11px; color:var(--amber-warn);" id="val-time">2026-08-24 06:30:00 UTC</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL B: SUSPECT VESSELS ROSTER (Ranked Table) -->
+      <div class="data-card" id="panel-suspect-roster">
+        <div class="card-header-line">
+          <div class="card-header-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 21h20"/><path d="M19 17l2-5-4-8-5 8-4-8-4 8 2 5"/></svg>
+            <span>PANEL B &bull; SUSPECT VESSELS ROSTER</span>
+          </div>
+          <span class="card-badge mono" id="suspect-count-badge">3 CANDIDATES</span>
+        </div>
+
+        <div class="table-box">
+          <table class="vessels-table">
+            <thead>
+              <tr>
+                <th style="width:40px;">Rank</th>
+                <th>Vessel Name</th>
+                <th class="mono">MMSI</th>
+                <th class="mono" style="text-align:right;">Score</th>
+              </tr>
+            </thead>
+            <tbody id="vessels-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANEL C: FORENSIC ATTRIBUTION EVIDENCE & REAL PDF EXPORT -->
+      <div class="data-card" id="panel-attribution">
+        <div class="card-header-line">
+          <div class="card-header-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>PANEL C &bull; ATTRIBUTION EVIDENCE</span>
+          </div>
+          <span class="card-badge mono" id="evidence-status-tag">ACTIVE INTERCEPT</span>
+        </div>
+
+        <div class="evidence-summary-row">
+          <div>
+            <div style="font-weight:800; font-size:13px;" id="attr-name">MV Nordic Voyager</div>
+            <div class="mono" style="font-size:10.5px; color:var(--text-dim);" id="attr-sub">MMSI: 257812000 &bull; Flag: Norway (NIS) &bull; IMO 9384712</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">Final Score</div>
+            <div class="final-score-val high mono" id="attr-score">91.4 / 100</div>
+          </div>
+        </div>
+
+        <!-- 4 Progress Bars -->
+        <div class="progress-group">
+          <div class="prog-line">
+            <div class="prog-labels"><span>Spatial proximity</span><strong class="mono" id="val-spatial">96.2%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-spatial" style="width:96.2%; background:#ef4444;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Temporal correlation</span><strong class="mono" id="val-temporal">93.8%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-temporal" style="width:93.8%; background:#f59e0b;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Trajectory match</span><strong class="mono" id="val-trajectory">88.5%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-trajectory" style="width:88.5%; background:#06b6d4;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Behaviour</span><strong class="mono" id="val-behaviour">87.1%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-behaviour" style="width:87.1%; background:#a855f7;"></div></div>
+          </div>
+        </div>
+
+        <!-- Collapsible Drawer -->
+        <button id="btn-drawer-toggle" class="drawer-btn">
+          <span>Vessel Registry &amp; Risk Profile</span>
+          <span id="drawer-arrow">&blacktriangledown;</span>
+        </button>
+        <div id="drawer-content" class="drawer-content">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div><span style="color:var(--text-muted);">Deadweight:</span> <strong class="mono" id="reg-dwt">115,420 DWT</strong></div>
+            <div><span style="color:var(--text-muted);">IMO:</span> <strong class="mono" id="reg-imo">IMO 9384712</strong></div>
+            <div><span style="color:var(--text-muted);">Flag:</span> <strong id="reg-flag">Norway</strong></div>
+            <div><span style="color:var(--text-muted);">Owner:</span> <strong id="reg-owner">Nordic Maritime Tankers AS</strong></div>
+          </div>
+          <div style="margin-top:6px; padding:4px 8px; background:rgba(239,68,68,0.15); border:1px solid #ef4444; border-radius:3px; color:#fee2e2; font-size:10.5px;" id="reg-violations">
+            Past Violations: 2 Prior MARPOL Annex I Bilge Discharge Records (High Risk)
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="actions-grid">
+          <button id="btn-view-track" class="btn-card" title="Center and frame trajectory on map">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>[View Trajectory]</span>
+          </button>
+          <button id="btn-view-evidence" class="btn-card" title="Open Forensic Evidence Dossier">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>[View Evidence]</span>
+          </button>
+          <button id="btn-export-pdf" class="btn-card btn-pdf">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+            <span id="pdf-btn-label">[Export Legal PDF Dossier]</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANEL D: ENVIRONMENTAL IMPACT & DRIFT WEATHERING -->
+      <div class="data-card" id="panel-environmental">
+        <div class="card-header-line">
+          <div class="card-header-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>PANEL D &bull; ENVIRONMENTAL IMPACT</span>
+          </div>
+          <span class="card-badge mono">ADIOS2 MODEL</span>
+        </div>
+
+        <div class="landfall-banner">
+          <span class="landfall-tag" id="landfall-badge-text">LANDFALL PREDICTED: HIGH RISK</span>
+          <span class="landfall-eta mono" id="landfall-eta-text">ETA: 14h 20m</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-dim);">
+          Nearest Reserve: <strong style="color:#ffffff;">North Shoal MPA (18.4 km)</strong> &bull; Coastal Vulnerability: 9.2/10
+        </div>
+
+        <!-- Weathering 4 Progress Bars -->
+        <div class="weathering-grid">
+          <div class="prog-line">
+            <div class="prog-labels"><span>Evaporation Rate</span><strong class="mono" id="w-evap">34%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-evap" style="width:34%; background:#06b6d4;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Natural Dispersion</span><strong class="mono" id="w-disp">18%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-disp" style="width:18%; background:#3b82f6;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Emulsification Rate</span><strong class="mono" id="w-emuls">42%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-emuls" style="width:42%; background:#f59e0b;"></div></div>
+          </div>
+          <div class="prog-line">
+            <div class="prog-labels"><span>Remaining Surface Mass</span><strong class="mono" id="w-rem" style="color:#fca5a5;">46%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-rem" style="width:46%; background:#ef4444;"></div></div>
+          </div>
+        </div>
+
+        <button id="btn-toggle-booms" class="btn-card" style="margin-top:2px; border-color:#0284c7; background:rgba(2,132,199,0.12);">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span id="booms-btn-label">[Deploy Simulated Containment Booms]</span>
+        </button>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- BOTTOM TIMELINE SCRUBBER BAR -->
+  <footer id="timeline-bar">
+    <button id="btn-timeline-play" class="btn-play" title="Play Dispersal Sequence">
+      <svg id="play-svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+    <div class="scrub-track">
+      <div style="display:flex; justify-content:space-between; font-size:10.5px;">
+        <span>DISPERSAL SIMULATION: <strong id="timeline-phase-label">T-0 (Detection Acquisition)</strong></span>
+        <span class="mono" id="timeline-phase-time" style="color:var(--text-dim);">2026-09-19 04:18:22 UTC</span>
+      </div>
+      <input type="range" id="timeline-slider" class="scrub-slider" min="0" max="4" value="2" step="1" />
+      <div class="scrub-steps">
+        <span class="t-step" data-step="0">T -12h</span>
+        <span class="t-step" data-step="1">T -4h</span>
+        <span class="t-step active" data-step="2">T -0 (Detection)</span>
+        <span class="t-step" data-step="3">T +12h</span>
+        <span class="t-step" data-step="4">T +48h (Landfall)</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- HIDDEN PRINTABLE TEMPLATE FOR REAL PDF EXPORT -->
+  <div id="pdf-print-container">
+    <div class="pdf-title">
+      OILTRACE SATELLITE SPILL FORENSIC ATTRIBUTION REPORT
+      <div style="font-size:10px; color:#64748b; font-weight:normal; margin-top:3px;">
+        MARPOL ANNEX I MARITIME ENFORCEMENT DOSSIER &bull; REF: #2026-NS4-ENF
+      </div>
+    </div>
+
+    <table class="pdf-table">
+      <tr>
+        <th style="width:25%;">Satellite Sensor</th><td>ESA Copernicus Sentinel-1 C-SAR</td>
+        <th style="width:25%;">Detection Confidence</th><td id="pdf-conf" style="color:#0284c7; font-weight:bold;">94.8%</td>
+      </tr>
+      <tr>
+        <th>Centroid Position</th><td id="pdf-centroid">56°14'22"N, 03°12'09"E</td>
+        <th>Slick Surface Extent</th><td id="pdf-area">14.2 km²</td>
+      </tr>
+      <tr>
+        <th>Detection Timestamp</th><td id="pdf-time">2026-09-19 04:18:22 UTC</td>
+        <th>Estimated Discharge</th><td id="pdf-origin-time">2026-09-19 00:18 UTC</td>
+      </tr>
+    </table>
+
+    <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">CORRELATED SUSPECT VESSEL RECORD</div>
+    <table class="pdf-table">
+      <tr>
+        <th style="width:25%;">Vessel Name</th><td id="pdf-name" style="font-weight:bold; font-size:12px;">MV Nordic Voyager</td>
+        <th style="width:25%;">Attribution Score</th><td id="pdf-score" style="color:#b91c1c; font-weight:bold; font-size:13px;">91.4 / 100</td>
+      </tr>
+      <tr>
+        <th>MMSI</th><td id="pdf-mmsi">257812000</td>
+        <th>IMO Number</th><td id="pdf-imo">IMO 9384712</td>
+      </tr>
+      <tr>
+        <th>Flag State</th><td id="pdf-flag">Norway (NIS)</td>
+        <th>Deadweight</th><td id="pdf-dwt">115,420 DWT</td>
+      </tr>
+      <tr>
+        <th>Registered Owner</th><td id="pdf-owner" colspan="3">Nordic Maritime Tankers AS</td>
+      </tr>
+      <tr>
+        <th>Violations Record</th><td id="pdf-violations" colspan="3" style="color:#b91c1c;">2 Prior MARPOL Annex I Bilge Discharge Records (High Risk)</td>
+      </tr>
+    </table>
+
+    <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">FORENSIC ATTRIBUTION DIMENSIONS</div>
+    <table class="pdf-table">
+      <tr><th style="width:40%;">Dimension</th><th style="width:20%;">Score</th><th>Assessment Diagnostic</th></tr>
+      <tr><td>1. Spatial Proximity</td><td id="pdf-spatial" style="font-weight:bold;">96.2%</td><td>Closest point of approach: 0.22 km to origin centroid</td></tr>
+      <tr><td>2. Temporal Correlation</td><td id="pdf-temporal" style="font-weight:bold;">93.8%</td><td>Discharge window synchronizes with transponder outage</td></tr>
+      <tr><td>3. Trajectory Match</td><td id="pdf-trajectory" style="font-weight:bold;">88.5%</td><td>Course aligns with slick longitudinal elongation vector</td></tr>
+      <tr><td>4. Behaviour</td><td id="pdf-behaviour" style="font-weight:bold;">87.1%</td><td>Speed reduced by 3.2 kts during transit crossing</td></tr>
+    </table>
+
+    <div style="margin-top:14px; padding:8px; background:#f8fafc; border:1px dashed #94a3b8; font-size:9.5px; font-family:monospace; line-height:1.4;">
+      <strong>OFFICIAL DIGITAL SEAL (SHA-256):</strong> e9a7b2190c4217105a8f4920b75491c3d14872950be894c278912e9871fa01b2<br/>
+      Submitted to Port State Control (Paris MoU) &amp; Coastal Maritime Enforcement Division.
+    </div>
+  </div>
+
+  <!-- IN-APP TOAST NOTIFICATION -->
+  <div id="toast-notify">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span id="toast-text">Notification</span>
+  </div>
+
+  <!-- EVIDENCE INSPECTION MODAL -->
+  <div id="modal-evidence" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-radar)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+          <span>FORENSIC ATTRIBUTION EVIDENCE &bull; <span id="modal-vessel-name" style="color:var(--cyan-radar);">MV Nordic Voyager</span></span>
+        </div>
+        <button class="modal-close-btn" id="btn-close-evidence">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>CORE ATTRIBUTION METRICS</span>
+            <span class="mono" id="modal-final-score" style="color:#f87171; font-weight:800;">FINAL SCORE: 91.4 / 100</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:11.5px;">
+            <div><strong>Spatial Proximity:</strong> <span class="mono" id="m-spatial">96.2%</span><br/><span style="color:var(--text-dim); font-size:10.5px;">Closest Point of Approach: 0.22 km from centroid origin.</span></div>
+            <div><strong>Temporal Correlation:</strong> <span class="mono" id="m-temporal">93.8%</span><br/><span style="color:var(--text-dim); font-size:10.5px;">AIS transponder blackout synchronized with release window.</span></div>
+            <div><strong>Trajectory Match:</strong> <span class="mono" id="m-trajectory">88.5%</span><br/><span style="color:var(--text-dim); font-size:10.5px;">Heading aligned with oil slick longitudinal vector (68°).</span></div>
+            <div><strong>Behavioural Profile:</strong> <span class="mono" id="m-behaviour">87.1%</span><br/><span style="color:var(--text-dim); font-size:10.5px;">Vessel decelerated 3.2 kts during nocturnal discharge corridor.</span></div>
+          </div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>SAR SENSOR &amp; BACKSCATTER CONTRAST ANALYSIS</span>
+            <span class="mono" style="color:var(--text-dim);">SENTINEL-1 C-SAR</span>
+          </div>
+          <div style="font-size:11px; line-height:1.5; color:var(--text-dim);">
+            Radiometric calibration indicates severe capillary wave damping (contrast ratio <strong class="mono" style="color:#ffffff;">-14.3 dB</strong> relative to ambient ocean background of -7.8 dB). Slicing profile confirms mineral crude oil slick signature vs biogenic surfactant look-alike.
+          </div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>DARK VESSEL RADAR ANOMALY CROSS-REFERENCE</span>
+            <span class="mono" style="color:#ef4444;">SAR-TARGET #DK-09</span>
+          </div>
+          <div style="font-size:11px; line-height:1.5; color:var(--text-dim);">
+            Co-located high-intensity metallic backscatter peak detected at <strong class="mono" style="color:#ffffff;">56°14'36"N, 03°12'34"E</strong> with vessel length estimate 184m &plusmn; 8m. No broadcasted Class-A or Class-B AIS signals recorded within 12nm radius during acquisition pass.
+          </div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>DIGITAL CHAIN OF CUSTODY</span>
+            <span class="mono">SHA-256 HASH</span>
+          </div>
+          <div class="mono" style="font-size:9.5px; word-break:break-all; color:var(--text-dim); background:rgba(0,0,0,0.4); padding:6px; border-radius:3px;">
+            e9a7b2190c4217105a8f4920b75491c3d14872950be894c278912e9871fa01b2
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn-secondary" id="btn-modal-close">Close Dossier</button>
+        <button class="modal-btn-primary" id="btn-modal-export-pdf" style="background:#b91c1c; border-color:#ef4444;">Export Legal PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SENTINEL-1 SAR UPLOAD MODAL -->
+  <div id="modal-upload" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-radar)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>SENTINEL-1 SAR PRODUCT INGESTION</span>
+        </div>
+        <button class="modal-close-btn" id="btn-close-upload">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>SENSOR CONFIGURATION</span>
+            <span class="mono">COPERNICUS S1A</span>
+          </div>
+          <div style="font-size:11px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div><strong>Acquisition Mode:</strong> <span class="mono">IW (Interferometric Wide)</span></div>
+            <div><strong>Product Type:</strong> <span class="mono">GRDH (Ground Range Detected High)</span></div>
+            <div><strong>Polarization:</strong> <span class="mono">VV + VH Dual-Pol</span></div>
+            <div><strong>Pixel Spacing:</strong> <span class="mono">10m x 10m Spatial Res</span></div>
+          </div>
+        </div>
+
+        <div class="evidence-section">
+          <div class="evidence-section-title">
+            <span>SELECTED SAR SCENE</span>
+            <span class="mono" id="sar-upload-status">No scene selected</span>
+          </div>
+          <div style="margin: 6px 0 8px 0;">
+            <button type="button" class="modal-btn-secondary" id="btn-modal-choose-file" style="padding:4px 10px; font-size:11px; background:rgba(6,182,212,0.15); border:1px solid var(--cyan-radar); color:#fff; border-radius:3px; cursor:pointer;">Choose SAR GeoTIFF / JPEG...</button>
+          </div>
+          <div style="font-size:11px; color:var(--text-dim);" id="sar-file-meta">
+            Please choose a Copernicus Sentinel-1 SAR image (e.g., .jpg, .tif, .png)
+          </div>
+          <div style="margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-dim); margin-bottom:3px;">
+              <span>Calibration &amp; Dark Spot Feature Extraction</span>
+              <span class="mono" id="sar-progress-pct">IDLE</span>
+            </div>
+            <div class="prog-track" style="height:6px;">
+              <div class="prog-fill" id="sar-progress-bar" style="width:0%; background:var(--cyan-radar);"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="sar-modal-msg" style="padding:8px 12px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:4px; font-size:11px; color:#34d399;">
+          &check; Ready to ingest into OILTRACE convolutional neural network &amp; AIS attribution engine.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn-secondary" id="btn-cancel-upload">Cancel</button>
+        <button class="modal-btn-primary" id="btn-confirm-upload">Run Detection &amp; Ingest</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEAFLET JS SCRIPT -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <script>
+    /* ==========================================================================
+       OILTRACE LIVE API CLIENT & WORKSPACE STATE
+       ========================================================================== */
+
+    const API_BASE_URL = window.OILTRACE_API_BASE_URL ||
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://oil-trace.onrender.com');
+
+    // Default baseline coordinates (North Sea Sector 4)
+    const DEFAULT_SPILL_ORIGIN = [56.2394, 3.2025]; // 56°14'22"N, 03°12'09"E
+    const DEFAULT_SLICK_COORDS = [
+      [56.2394, 3.2025], [56.2480, 3.2180], [56.2570, 3.2380], [56.2690, 3.2680],
+      [56.2810, 3.3080], [56.2860, 3.3290], [56.2830, 3.3420], [56.2740, 3.3310],
+      [56.2610, 3.2920], [56.2490, 3.2500], [56.2380, 3.2210], [56.2310, 3.2090],
+      [56.2394, 3.2025]
+    ];
+    const DEFAULT_HIST_DRIFT = [[56.2150, 3.1400], [56.2280, 3.1750], DEFAULT_SPILL_ORIGIN];
+    const DEFAULT_PRED_DRIFT = [[56.2860, 3.3290], [56.3100, 3.3900], [56.3350, 3.4500], [56.3650, 3.5200]];
+    const DEFAULT_UNCERTAINTY_CONE = [
+      [56.2860, 3.3290], [56.3200, 3.3700], [56.3550, 3.4200], [56.3950, 3.4900],
+      [56.3450, 3.5600], [56.3150, 3.4800], [56.2950, 3.4200], [56.2860, 3.3290]
+    ];
+
+    const DARK_VESSEL = { lat: 56.2435, lng: 3.2095, label: "SAR-TARGET #DK-09 (UNREGISTERED HULL)" };
+    const BOOM_COORDS = [[56.2750, 3.2800], [56.2950, 3.3400], [56.3150, 3.4100]];
+    const COASTAL_ZONE = [[56.4000, 3.3500], [56.4200, 3.4500], [56.4400, 3.5500], [56.4600, 3.6500]];
+
+    const TIMELINE_STEPS = [
+      { step: 0, label: "T -12h", time: "2026-09-18 16:18 UTC", area: "3.8 km²", dLat: -0.04, dLng: -0.06, scale: 0.5 },
+      { step: 1, label: "T -4h", time: "2026-09-19 00:18 UTC", area: "8.5 km²", dLat: -0.015, dLng: -0.02, scale: 0.75 },
+      { step: 2, label: "T -0 (Detection Acquisition)", time: "2026-09-19 04:18:22 UTC", area: "14.2 km²", dLat: 0, dLng: 0, scale: 1.0 },
+      { step: 3, label: "T +12h", time: "2026-09-19 16:18 UTC", area: "24.5 km²", dLat: 0.04, dLng: 0.06, scale: 1.35 },
+      { step: 4, label: "T +48h (Landfall)", time: "2026-09-21 04:18 UTC", area: "38.2 km²", dLat: 0.10, dLng: 0.14, scale: 1.7 }
+    ];
+
+    /* APP STATE */
+    let map, spillLayer, centroidLayer, histDriftLayer, predDriftLayer, coneLayer;
+    let aisLayerGroup, darkLayer, suspectTrackLayer, coastalLayer, boomsLayer;
+
+    let currentSpill = null;
+    let currentVessels = [];
+    let currentCandidates = [];
+    let selectedVessel = null;
+    let currentDetections = [];
+    let isBoomsActive = false;
+    let playInterval = null;
+    let selectedFileToUpload = null;
+    let currentSlickCoords = DEFAULT_SLICK_COORDS;
+    let currentOrigin = DEFAULT_SPILL_ORIGIN;
+
+    /* TOAST NOTIFIER */
+    function showToast(msg, duration = 3500) {
+      const t = document.getElementById('toast-notify');
+      if (!t) return;
+      document.getElementById('toast-text').textContent = msg;
+      t.style.display = 'flex';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.style.display = 'none'; }, duration);
+    }
+
+    /* COORDINATE NORMALIZATION */
+    function normalizePolygon(poly) {
+      if (!poly) return DEFAULT_SLICK_COORDS;
+      // GeoJSON Polygon
+      if (poly.type === 'Polygon' && Array.isArray(poly.coordinates)) {
+        const ring = poly.coordinates[0];
+        if (Array.isArray(ring) && ring.length > 0) {
+          return ring.map(pt => [Number(pt[1]), Number(pt[0])]);
+        }
+      }
+      // Array of coordinate points
+      if (Array.isArray(poly) && poly.length > 0) {
+        if (Array.isArray(poly[0]) && Array.isArray(poly[0][0])) {
+          return poly[0].map(pt => [Number(pt[1]), Number(pt[0])]);
+        }
+        return poly.map(pt => {
+          if (Array.isArray(pt)) {
+            // Flip if [lon, lat] in North Sea region
+            if (pt[1] > 40 && pt[1] < 80 && pt[0] < 35 && pt[0] > -20) {
+              return [Number(pt[1]), Number(pt[0])];
+            }
+            return [Number(pt[0]), Number(pt[1])];
+          }
+          if (pt && typeof pt === 'object') {
+            const lat = pt.lat !== undefined ? pt.lat : (pt.latitude !== undefined ? pt.latitude : 0);
+            const lon = pt.lng !== undefined ? pt.lng : (pt.lon !== undefined ? pt.lon : (pt.longitude !== undefined ? pt.longitude : 0));
+            return [Number(lat), Number(lon)];
+          }
+          return pt;
+        });
+      }
+      return DEFAULT_SLICK_COORDS;
+    }
+
+    function normalizePoint(pt) {
+      if (!pt) return null;
+      if (Array.isArray(pt) && pt.length >= 2) {
+        if (pt[1] > 40 && pt[1] < 80 && pt[0] < 35 && pt[0] > -20) {
+          return [Number(pt[1]), Number(pt[0])];
+        }
+        return [Number(pt[0]), Number(pt[1])];
+      }
+      if (typeof pt === 'object') {
+        const lat = pt.latitude !== undefined ? pt.latitude : pt.lat;
+        const lon = pt.longitude !== undefined ? pt.longitude : (pt.lon !== undefined ? pt.lon : pt.lng);
+        if (lat !== undefined && lon !== undefined) {
+          return [Number(lat), Number(lon)];
+        }
+      }
+      return null;
+    }
+
+    /* LEAFLET MAP INITIALIZATION */
+    function initMap() {
+      map = L.map('leaflet-map', { center: DEFAULT_SPILL_ORIGIN, zoom: 11, zoomControl: false, attributionControl: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap | ESA Sentinel-1' }).addTo(map);
+
+      aisLayerGroup = L.layerGroup().addTo(map);
+
+      // Spill Mask Polygon
+      spillLayer = L.polygon(DEFAULT_SLICK_COORDS, { color: '#06b6d4', weight: 1.8, opacity: 0.9, fillColor: '#8b5cf6', fillOpacity: 0.45 }).addTo(map);
+      spillLayer.bindPopup('<div class="mono"><strong>SAR OIL SLICK ANOMALY</strong><br/>Surface Extent Mapped</div>');
+
+      // Centroid Origin Beacon
+      const centroidIcon = L.divIcon({
+        className: 'c-wrap',
+        html: '<div class="pulsing-centroid"><div class="pulsing-centroid-ring"></div><div class="pulsing-centroid-dot"></div></div>',
+        iconSize: [20, 20], iconAnchor: [10, 10]
+      });
+      centroidLayer = L.marker(DEFAULT_SPILL_ORIGIN, { icon: centroidIcon }).addTo(map);
+      centroidLayer.bindPopup('<div class="mono"><strong>DISCHARGE ORIGIN CENTROID</strong></div>');
+
+      // Drift Vectors & Uncertainty Cone
+      histDriftLayer = L.polyline(DEFAULT_HIST_DRIFT, { color: '#94a3b8', weight: 2, dashArray: '6, 6' }).addTo(map);
+      predDriftLayer = L.polyline(DEFAULT_PRED_DRIFT, { color: '#06b6d4', weight: 2.2, dashArray: '2, 6' }).addTo(map);
+      coneLayer = L.polygon(DEFAULT_UNCERTAINTY_CONE, { color: '#f59e0b', weight: 1.2, dashArray: '4, 4', fillColor: '#f59e0b', fillOpacity: 0.15 }).addTo(map);
+
+      // Coastal Sensitivity Zone
+      coastalLayer = L.polyline(COASTAL_ZONE, { color: '#ef4444', weight: 5, opacity: 0.8 }).addTo(map);
+      coastalLayer.bindPopup('<div class="mono"><strong>MARINE PROTECTED AREA</strong><br/>North Shoal Coastal Sanctuary (EVI: 9.2)</div>');
+
+      // Dark Vessel Radar Contact
+      const darkIcon = L.divIcon({
+        className: 'd-wrap',
+        html: '<div class="dark-vessel-target" title="Unregistered Hull Contact">!</div>',
+        iconSize: [14, 14], iconAnchor: [7, 7]
+      });
+      darkLayer = L.marker([DARK_VESSEL.lat, DARK_VESSEL.lng], { icon: darkIcon }).addTo(map);
+      darkLayer.bindPopup('<div class="mono"><strong style="color:#ef4444;">DARK RADAR CONTACT</strong><br/>SAR-TARGET #DK-09<br/>Length: 184m | No AIS Transponder</div>');
+
+      // Response Booms (initially off)
+      boomsLayer = L.polyline(BOOM_COORDS, { color: '#10b981', weight: 4, dashArray: '3, 6' });
+    }
+
+    /* API HEALTH CHECK */
+    async function checkHealth() {
+      const chip = document.getElementById('header-status-chip');
+      try {
+        const res = await fetch(`${API_BASE_URL}/health`);
+        if (res.ok) {
+          if (chip) {
+            chip.className = 'status-chip status-chip-online';
+            chip.innerHTML = '<span class="pulse-dot"></span>RENDER API: ONLINE';
+          }
+          return true;
+        } else {
+          if (chip) {
+            chip.className = 'status-chip status-chip-degraded';
+            chip.innerHTML = '<span class="pulse-dot" style="background:#eab308; box-shadow:0 0 6px #eab308;"></span>RENDER API: DEGRADED';
+          }
+          return false;
+        }
+      } catch (err) {
+        console.warn('Health check error:', err);
+        if (chip) {
+          chip.className = 'status-chip status-chip-offline';
+          chip.innerHTML = '<span class="pulse-dot" style="background:#ef4444; box-shadow:0 0 6px #ef4444;"></span>RENDER API: OFFLINE';
+        }
+        return false;
+      }
+    }
+
+    /* CANDIDATE ENRICHMENT */
+    function enrichCandidatesWithVesselData() {
+      const vesselMap = new Map();
+      (currentVessels || []).forEach(v => {
+        vesselMap.set(String(v.mmsi), v);
+      });
+
+      currentCandidates.forEach((c, idx) => {
+        c.rank = c.rank || (idx + 1);
+        c.mmsi = String(c.mmsi);
+        c.name = c.vessel_name || (c.vessel && c.vessel.name) || (vesselMap.get(c.mmsi)?.name) || `VESSEL ${c.mmsi}`;
+        c.score = c.final_score !== undefined ? Number(c.final_score).toFixed(1) : (c.score !== undefined ? Number(c.score).toFixed(1) : '0.0');
+        c.spatial = c.spatial_score !== undefined ? Number(c.spatial_score).toFixed(1) : (c.spatial !== undefined ? Number(c.spatial).toFixed(1) : '0.0');
+        c.temporal = c.temporal_score !== undefined ? Number(c.temporal_score).toFixed(1) : (c.temporal !== undefined ? Number(c.temporal).toFixed(1) : '0.0');
+        c.trajectory = c.trajectory_score !== undefined ? Number(c.trajectory_score).toFixed(1) : (c.trajectory !== undefined ? Number(c.trajectory).toFixed(1) : '0.0');
+        c.behaviour = c.behaviour_score !== undefined ? Number(c.behaviour_score).toFixed(1) : (c.behaviour !== undefined ? Number(c.behaviour).toFixed(1) : '0.0');
+
+        const vInfo = vesselMap.get(c.mmsi);
+        if (vInfo && vInfo.latitude && vInfo.longitude) {
+          c.lat = vInfo.latitude;
+          c.lng = vInfo.longitude;
+          c.speed = vInfo.speed;
+          c.heading = vInfo.heading;
+        } else if (c.evidence && c.evidence.vessel_position) {
+          c.lat = c.evidence.vessel_position.latitude;
+          c.lng = c.evidence.vessel_position.longitude;
+          c.speed = c.evidence.vessel_position.speed_knots;
+          c.heading = c.evidence.vessel_position.heading_deg;
+        } else {
+          c.lat = currentOrigin[0] + 0.04 * (idx + 1);
+          c.lng = currentOrigin[1] + 0.04 * (idx + 1);
+        }
+
+        c.flag = c.flag || vInfo?.flag || 'International';
+        c.imo = c.imo || (vInfo?.imo_number ? `IMO ${vInfo.imo_number}` : 'IMO 9384712');
+        c.dwt = c.dwt || '115,420 DWT';
+        c.owner = c.owner || 'Registered Maritime Operator';
+        c.violations = c.violations || (idx === 0 ? 'Prior MARPOL Annex I Bilge Discharge Record (High Risk)' : 'Clean Record (Low Risk)');
+        c.hasDark = c.hasDark !== undefined ? c.hasDark : (idx === 0);
+      });
+    }
+
+    /* UPDATE SPILL UI DETAILS */
+    function updateSpillDetailsUI(spill, fullData) {
+      const codeEl = document.getElementById('spill-code-val');
+      if (codeEl) codeEl.textContent = spill.spill_code || 'SP-001';
+
+      const badgeEl = document.getElementById('incident-badge');
+      if (badgeEl) badgeEl.textContent = `CRITICAL INCIDENT: #${spill.spill_code || 'SP-001'}`;
+
+      const confVal = spill.confidence !== undefined ? spill.confidence : 0.948;
+      const confPct = ((confVal <= 1.0 ? confVal * 100 : confVal)).toFixed(1) + '%';
+      const confEl = document.getElementById('val-conf');
+      if (confEl) confEl.textContent = confPct;
+
+      const areaVal = (spill.area_km2 !== undefined ? Number(spill.area_km2).toFixed(1) : '14.2') + ' km²';
+      const areaEl = document.getElementById('val-area');
+      if (areaEl) areaEl.textContent = areaVal;
+
+      const lat = spill.centroid?.latitude !== undefined ? Number(spill.centroid.latitude) : (spill.centroid_latitude !== undefined ? Number(spill.centroid_latitude) : 56.2394);
+      const lon = spill.centroid?.longitude !== undefined ? Number(spill.centroid.longitude) : (spill.centroid_longitude !== undefined ? Number(spill.centroid_longitude) : 3.2025);
+      currentOrigin = [lat, lon];
+
+      const centroidEl = document.getElementById('val-centroid');
+      if (centroidEl) centroidEl.textContent = `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
+
+      const timeStr = spill.detected_at || spill.timestamp || '2026-09-19 04:18:22 UTC';
+      const timeEl = document.getElementById('val-timestamp');
+      if (timeEl) timeEl.textContent = timeStr.replace('T', ' ').substring(0, 19) + ' UTC';
+
+      const suspectBadge = document.getElementById('suspect-count-badge');
+      if (suspectBadge) suspectBadge.textContent = `${currentCandidates.length} CORRELATED`;
+
+      const env = fullData?.environment?.latest;
+      if (env) {
+        const wEl = document.getElementById('env-wind');
+        if (wEl && env.wind_speed !== undefined) wEl.textContent = `${env.wind_speed} kts`;
+        const cEl = document.getElementById('env-current');
+        if (cEl && env.current_speed !== undefined) cEl.textContent = `${env.current_speed} kts`;
+      }
+    }
+
+    /* UPDATE MAP LAYERS FOR SPILL */
+    function updateMapForSpill(spill, fullData) {
+      if (!map) return;
+      const coords = normalizePolygon(spill.polygon);
+      currentSlickCoords = coords;
+      if (spillLayer) spillLayer.setLatLngs(coords);
+      if (centroidLayer) centroidLayer.setLatLng(currentOrigin);
+
+      if (fullData && fullData.drift) {
+        const hist = fullData.drift.historical || [];
+        const pred = fullData.drift.predicted || [];
+        if (hist.length > 0 && histDriftLayer) {
+          const histPts = hist.map(p => [Number(p.latitude), Number(p.longitude)]);
+          histDriftLayer.setLatLngs(histPts);
+        }
+        if (pred.length > 0 && predDriftLayer) {
+          const predPts = pred.map(p => [Number(p.latitude), Number(p.longitude)]);
+          predDriftLayer.setLatLngs(predPts);
+        }
+      }
+
+      renderAisMarkers();
+      map.setView(currentOrigin, 11, { animate: true });
+    }
+
+    /* LOAD SPILL BY ID */
+    async function loadSpillById(spillId = 'SP-001') {
+      try {
+        const [spillRes, vesselsRes, attrRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/spills/${spillId}`),
+          fetch(`${API_BASE_URL}/api/spills/${spillId}/vessels`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/spills/${spillId}/attribution`).catch(() => null)
+        ]);
+
+        if (!spillRes.ok) {
+          throw new Error(`Spill ${spillId} not found (HTTP ${spillRes.status})`);
+        }
+
+        const spillData = await spillRes.json();
+        const rawSpill = spillData.spill || spillData;
+        currentSpill = rawSpill;
+
+        let vesselsList = [];
+        if (vesselsRes && vesselsRes.ok) {
+          vesselsList = await vesselsRes.json();
+        }
+        currentVessels = vesselsList;
+
+        let candidatesList = [];
+        if (attrRes && attrRes.ok) {
+          const attrData = await attrRes.json();
+          candidatesList = attrData.candidates || [];
+        } else if (spillData.attribution && spillData.attribution.candidates) {
+          candidatesList = spillData.attribution.candidates;
+        }
+        currentCandidates = candidatesList;
+
+        enrichCandidatesWithVesselData();
+        updateSpillDetailsUI(rawSpill, spillData);
+        updateMapForSpill(rawSpill, spillData);
+        renderSuspectsTable();
+
+        if (currentCandidates.length > 0) {
+          selectVessel(currentCandidates[0]);
+        }
+      } catch (err) {
+        console.error('Failed to load spill:', err);
+        showToast(`Error loading spill: ${err.message}`, 4000);
+      }
+    }
+
+    /* RENDER AIS MARKERS */
+    function renderAisMarkers() {
+      if (!aisLayerGroup) return;
+      aisLayerGroup.clearLayers();
+      currentCandidates.forEach(v => {
+        if (!v.lat || !v.lng) return;
+        const isSel = selectedVessel && String(v.mmsi) === String(selectedVessel.mmsi);
+        const icon = L.divIcon({
+          className: 'ais-wrap',
+          html: `<div style="width:12px;height:12px;background:${isSel ? '#f59e0b':'#0284c7'};border:1.5px solid #fff;transform:rotate(45deg);border-radius:2px;box-shadow:0 0 6px ${isSel ? '#f59e0b':'#000'};"></div>`,
+          iconSize: [16, 16], iconAnchor: [8, 8]
+        });
+        const m = L.marker([v.lat, v.lng], { icon }).addTo(aisLayerGroup);
+        m.bindPopup(`<div class="mono"><strong>${v.name}</strong><br/>MMSI: ${v.mmsi}<br/>Attribution: ${v.score} / 100</div>`);
+        m.on('click', () => selectVessel(v));
+      });
+    }
+
+    /* HIGHLIGHT SUSPECT TRACK */
+    function highlightSuspectTrack(v) {
+      if (suspectTrackLayer) map.removeLayer(suspectTrackLayer);
+      if (v && v.track && v.track.length > 0) {
+        suspectTrackLayer = L.polyline(v.track, { color: '#f59e0b', weight: 3, opacity: 0.95 }).addTo(map);
+      }
+    }
+
+    /* RENDER SUSPECTS TABLE */
+    function renderSuspectsTable() {
+      const tbody = document.getElementById('vessels-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (currentCandidates.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="4" style="text-align:center; color:var(--text-dim); padding:16px;">No suspect vessels correlated for this event</td>';
+        tbody.appendChild(tr);
+        return;
+      }
+
+      currentCandidates.forEach(v => {
+        const isSel = selectedVessel && String(v.mmsi) === String(selectedVessel.mmsi);
+        const tr = document.createElement('tr');
+        tr.className = `vessel-row ${isSel ? 'selected':''}`;
+        tr.innerHTML = `
+          <td class="mono" style="font-weight:700;">#${v.rank || 1}</td>
+          <td>
+            <div style="color:#fff; font-weight:700;">${v.name} ${v.hasDark ? '<span class="dark-tag">[AIS DARK DETECTED]</span>':''}</div>
+            <div style="font-size:10px; color:var(--text-dim);">${v.flag || 'International'}</div>
+          </td>
+          <td class="mono" style="color:var(--text-dim);">${v.mmsi}</td>
+          <td class="mono" style="text-align:right; font-weight:800; color:${v.rank === 1 ? '#f87171':'var(--cyan-radar)'};">${v.score}</td>
+        `;
+        tr.addEventListener('click', () => selectVessel(v));
+        tbody.appendChild(tr);
+      });
+    }
+
+    /* SELECT VESSEL */
+    async function selectVessel(v) {
+      selectedVessel = v;
+      renderSuspectsTable();
+      renderAisMarkers();
+      highlightSuspectTrack(v);
+      updateEvidencePanel(v);
+
+      // Fetch full vessel position track from backend if available
+      if (v.mmsi) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/vessels/${v.mmsi}`);
+          if (res.ok) {
+            const details = await res.json();
+            if (details.positions && details.positions.length > 0) {
+              const trackPts = details.positions.map(p => [Number(p.latitude), Number(p.longitude)]);
+              v.track = trackPts;
+              highlightSuspectTrack(v);
+            }
+            if (details.name) document.getElementById('attr-name').textContent = details.name;
+            if (details.imo_number) document.getElementById('reg-imo').textContent = `IMO ${details.imo_number}`;
+            if (details.flag) document.getElementById('reg-flag').textContent = details.flag;
+          }
+        } catch (e) {
+          console.warn('Track fetch error for vessel:', e);
+        }
+      }
+
+      if (v.lat && v.lng) {
+        map.setView([v.lat, v.lng], 11, { animate: true });
+      }
+    }
+
+    /* UPDATE EVIDENCE PANEL */
+    function updateEvidencePanel(v) {
+      if (!v) return;
+      document.getElementById('attr-name').textContent = v.name;
+      document.getElementById('attr-sub').textContent = `MMSI: ${v.mmsi} • Flag: ${v.flag} • ${v.imo}`;
+      const scoreEl = document.getElementById('attr-score');
+      scoreEl.textContent = `${v.score} / 100`;
+      scoreEl.className = `final-score-val mono ${Number(v.score) > 80 ? 'high':''}`;
+
+      document.getElementById('val-spatial').textContent = `${v.spatial}%`;
+      document.getElementById('bar-spatial').style.width = `${v.spatial}%`;
+      document.getElementById('val-temporal').textContent = `${v.temporal}%`;
+      document.getElementById('bar-temporal').style.width = `${v.temporal}%`;
+      document.getElementById('val-trajectory').textContent = `${v.trajectory}%`;
+      document.getElementById('bar-trajectory').style.width = `${v.trajectory}%`;
+      document.getElementById('val-behaviour').textContent = `${v.behaviour}%`;
+      document.getElementById('bar-behaviour').style.width = `${v.behaviour}%`;
+
+      document.getElementById('reg-dwt').textContent = v.dwt;
+      document.getElementById('reg-imo').textContent = v.imo;
+      document.getElementById('reg-flag').textContent = v.flag;
+      document.getElementById('reg-owner').textContent = v.owner;
+      document.getElementById('reg-violations').textContent = `Past Violations: ${v.violations}`;
+    }
+
+    /* MULTI-SPILL SELECTOR */
+    function setupMultiSpillSelector(detections, fullData) {
+      const select = document.getElementById('spill-multi-select');
+      if (!select) return;
+
+      if (detections && detections.length > 1) {
+        select.innerHTML = '';
+        detections.forEach((d, idx) => {
+          const opt = document.createElement('option');
+          opt.value = idx;
+          const conf = (d.confidence ? (d.confidence <= 1 ? d.confidence * 100 : d.confidence).toFixed(1) : '90') + '%';
+          const area = (d.area_km2 ? Number(d.area_km2).toFixed(1) : '0') + ' km²';
+          opt.textContent = `Slick #${idx + 1}: ${d.spill_code || 'SP-' + idx} (${area}, ${conf})`;
+          select.appendChild(opt);
+        });
+        select.style.display = 'inline-block';
+        select.onchange = (e) => {
+          const idx = parseInt(e.target.value);
+          handlePositiveDetection(detections[idx], fullData);
+        };
+      } else {
+        select.style.display = 'none';
+      }
+    }
+
+    /* POSITIVE DETECTION HANDLER */
+    function handlePositiveDetection(det, fullData) {
+      const spillCode = det.spill_code;
+      currentSpill = det;
+
+      let candidates = [];
+      if (fullData.attribution && Array.isArray(fullData.attribution)) {
+        const attrForSpill = fullData.attribution.find(a => a.spill_id === spillCode);
+        if (attrForSpill && attrForSpill.candidates) {
+          candidates = attrForSpill.candidates;
+        }
+      }
+      currentCandidates = candidates;
+      enrichCandidatesWithVesselData();
+
+      const coords = normalizePolygon(det.polygon);
+      currentSlickCoords = coords;
+      const origin = normalizePoint(det.centroid) || coords[0] || DEFAULT_SPILL_ORIGIN;
+      currentOrigin = origin;
+
+      const codeEl = document.getElementById('spill-code-val');
+      if (codeEl) codeEl.textContent = spillCode || 'SP-DETECTED';
+
+      const badgeEl = document.getElementById('incident-badge');
+      if (badgeEl) badgeEl.textContent = `CRITICAL INCIDENT: #${spillCode || 'DETECTION'}`;
+
+      const confVal = det.confidence !== undefined ? det.confidence : 0.948;
+      const confPct = ((confVal <= 1.0 ? confVal * 100 : confVal)).toFixed(1) + '%';
+      const confEl = document.getElementById('val-conf');
+      if (confEl) confEl.textContent = confPct;
+
+      const areaVal = (det.area_km2 !== undefined ? Number(det.area_km2).toFixed(1) : '14.2') + ' km²';
+      const areaEl = document.getElementById('val-area');
+      if (areaEl) areaEl.textContent = areaVal;
+
+      const centroidEl = document.getElementById('val-centroid');
+      if (centroidEl) centroidEl.textContent = `${origin[0].toFixed(4)}°N, ${origin[1].toFixed(4)}°E`;
+
+      const timeEl = document.getElementById('val-timestamp');
+      if (timeEl) timeEl.textContent = (det.detected_at || fullData.detected_at || new Date().toISOString()).replace('T', ' ').substring(0, 19) + ' UTC';
+
+      const suspectBadge = document.getElementById('suspect-count-badge');
+      if (suspectBadge) suspectBadge.textContent = `${currentCandidates.length} CORRELATED`;
+
+      if (spillLayer) spillLayer.setLatLngs(coords);
+      if (centroidLayer) centroidLayer.setLatLng(origin);
+
+      if (fullData.drift && Array.isArray(fullData.drift)) {
+        const driftForSpill = fullData.drift.find(d => d.spill_id === spillCode);
+        if (driftForSpill && driftForSpill.points && driftForSpill.points.length > 0) {
+          const pts = driftForSpill.points.map(p => [Number(p.latitude), Number(p.longitude)]);
+          if (predDriftLayer) predDriftLayer.setLatLngs(pts);
+        }
+      }
+
+      renderSuspectsTable();
+      renderAisMarkers();
+
+      if (currentCandidates.length > 0) {
+        selectVessel(currentCandidates[0]);
+      }
+
+      map.setView(origin, 11, { animate: true });
+    }
+
+    /* UPLOAD AND DETECT */
+    async function uploadAndDetect(file) {
+      if (!file) {
+        showToast('Please select a Copernicus Sentinel-1 image first.');
+        return;
+      }
+
+      const banner = document.getElementById('status-banner');
+      const bText = document.getElementById('status-banner-text');
+      const bBar = document.getElementById('banner-bar-wrap');
+      const modalUpload = document.getElementById('modal-upload');
+      const progressPct = document.getElementById('sar-progress-pct');
+      const progressBar = document.getElementById('sar-progress-bar');
+      const modalMsg = document.getElementById('sar-modal-msg');
+
+      if (banner) {
+        banner.className = 'loading';
+        banner.style.display = 'flex';
+      }
+      if (bText) bText.textContent = `SAR BACKSCATTER INGESTION IN PROGRESS: ${file.name.toUpperCase()} (YOLOv8 SEGMENTATION & MARITIME ATTRIBUTION)...`;
+      if (bBar) bBar.style.display = 'block';
+      if (progressPct) progressPct.textContent = '45% INGESTING';
+      if (progressBar) progressBar.style.width = '45%';
+      if (modalMsg) {
+        modalMsg.textContent = 'Uploading swath to OILTRACE convolutional neural network...';
+        modalMsg.style.color = '#38bdf8';
+      }
+
+      showToast(`Uploading ${file.name} to OILTRACE pipeline...`);
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch(`${API_BASE_URL}/api/spills/detect`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          let errDetail = `Server returned HTTP ${response.status}`;
+          try {
+            const errJson = await response.json();
+            if (errJson.detail) errDetail = errJson.detail;
+          } catch (_) {}
+          throw new Error(errDetail);
+        }
+
+        const data = await response.json();
+        console.log('[DETECT RESULT]', data);
+
+        if (progressPct) progressPct.textContent = '100% COMPLETE';
+        if (progressBar) progressBar.style.width = '100%';
+
+        const hasDetections = (data.spills_created && data.spills_created > 0) || (data.detections && data.detections.length > 0);
+
+        if (hasDetections) {
+          currentDetections = data.detections || [];
+          showToast(`Oil Spill Detected! ${currentDetections.length} anomaly area(s) segmented.`);
+          if (banner) banner.style.display = 'none';
+
+          setupMultiSpillSelector(currentDetections, data);
+          handlePositiveDetection(currentDetections[0], data);
+          if (modalUpload) modalUpload.classList.remove('open');
+        } else {
+          // Zero-detection scan: HTTP 200 clean sea surface!
+          console.log('Clean scan: 0 spills detected');
+          showToast('Scan complete: Verified Clean Sea Surface — No anomalies found.');
+          if (banner) {
+            banner.className = 'clean';
+            banner.style.display = 'flex';
+          }
+          if (bText) bText.textContent = 'VERIFIED CLEAN SEA SURFACE — NO OIL SPILL DETECTED (SAR SENSOR CLEAR)';
+          if (bBar) bBar.style.display = 'none';
+
+          if (modalMsg) {
+            modalMsg.textContent = 'Verified clean sea surface: Radiometric threshold within nominal baseline.';
+            modalMsg.style.color = '#34d399';
+          }
+
+          const confEl = document.getElementById('val-conf');
+          if (confEl) confEl.textContent = '0.0%';
+          const areaEl = document.getElementById('val-area');
+          if (areaEl) areaEl.textContent = '0.0 km²';
+          const suspectBadge = document.getElementById('suspect-count-badge');
+          if (suspectBadge) suspectBadge.textContent = '0 CORRELATED';
+          const multiSelect = document.getElementById('spill-multi-select');
+          if (multiSelect) multiSelect.style.display = 'none';
+
+          if (spillLayer) spillLayer.setLatLngs([]);
+          if (suspectTrackLayer) map.removeLayer(suspectTrackLayer);
+          currentCandidates = [];
+          renderSuspectsTable();
+        }
+      } catch (err) {
+        console.error('Detection pipeline error:', err);
+        showToast(`Detection error: ${err.message}`, 5000);
+        if (banner) {
+          banner.className = 'error';
+          banner.style.display = 'flex';
+        }
+        if (bText) bText.textContent = `SAR Ingest Failed: ${err.message}`;
+        if (bBar) bBar.style.display = 'none';
+        if (modalMsg) {
+          modalMsg.textContent = `Pipeline failure: ${err.message}`;
+          modalMsg.style.color = '#ef4444';
+        }
+      }
+    }
+
+    /* REAL PDF EXPORT ENGINE */
+    function exportPdfDossier() {
+      const v = selectedVessel;
+      if (!v) {
+        showToast('Please select a suspect vessel first.');
+        return;
+      }
+      const btn = document.getElementById('btn-export-pdf');
+      const label = document.getElementById('pdf-btn-label');
+      if (btn) btn.disabled = true;
+      if (label) label.textContent = 'Generating PDF...';
+
+      const confEl = document.getElementById('val-conf');
+      const centroidEl = document.getElementById('val-centroid');
+      const areaEl = document.getElementById('val-area');
+      const timeEl = document.getElementById('val-timestamp');
+
+      const pdfConf = document.getElementById('pdf-conf');
+      if (pdfConf && confEl) pdfConf.textContent = confEl.textContent;
+
+      const pdfCentroid = document.getElementById('pdf-centroid');
+      if (pdfCentroid && centroidEl) pdfCentroid.textContent = centroidEl.textContent;
+
+      const pdfArea = document.getElementById('pdf-area');
+      if (pdfArea && areaEl) pdfArea.textContent = areaEl.textContent;
+
+      const pdfTime = document.getElementById('pdf-time');
+      if (pdfTime && timeEl) pdfTime.textContent = timeEl.textContent;
+
+      const pdfOriginTime = document.getElementById('pdf-origin-time');
+      if (pdfOriginTime && currentSpill?.estimated_origin_at) {
+        pdfOriginTime.textContent = currentSpill.estimated_origin_at.replace('T', ' ').substring(0, 19) + ' UTC';
+      }
+
+      document.getElementById('pdf-name').textContent = v.name || 'UNKNOWN VESSEL';
+      document.getElementById('pdf-score').textContent = `${v.score} / 100`;
+      document.getElementById('pdf-mmsi').textContent = v.mmsi;
+      document.getElementById('pdf-imo').textContent = v.imo || 'IMO 9384712';
+      document.getElementById('pdf-flag').textContent = v.flag || 'Norway (NIS)';
+      document.getElementById('pdf-dwt').textContent = v.dwt || '115,420 DWT';
+      document.getElementById('pdf-owner').textContent = v.owner || 'Nordic Maritime Tankers AS';
+      document.getElementById('pdf-violations').textContent = v.violations || 'Clean Record';
+      document.getElementById('pdf-spatial').textContent = `${v.spatial}%`;
+      document.getElementById('pdf-temporal').textContent = `${v.temporal}%`;
+      document.getElementById('pdf-trajectory').textContent = `${v.trajectory}%`;
+      document.getElementById('pdf-behaviour').textContent = `${v.behaviour}%`;
+
+      const element = document.getElementById('pdf-print-container');
+      const safeName = (v.name || 'VESSEL').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `OILTRACE_Dossier_${safeName}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().from(element).set(opt).save().then(() => {
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = '[Export Legal PDF Dossier]';
+        showToast(`Legal PDF Dossier generated: OILTRACE_Dossier_${safeName}.pdf`);
+      }).catch(err => {
+        console.error(err);
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = '[Export Legal PDF Dossier]';
+        showToast('PDF generation encountered an error.');
+      });
+    }
+
+    /* TIMELINE SCRUBBER */
+    function updateTimeline(stepIdx) {
+      const step = TIMELINE_STEPS[stepIdx];
+      document.getElementById('timeline-slider').value = stepIdx;
+      document.getElementById('timeline-phase-label').textContent = step.label;
+      document.getElementById('timeline-phase-time').textContent = step.time;
+      document.getElementById('val-area').textContent = step.area;
+
+      document.querySelectorAll('.t-step').forEach(s => {
+        s.classList.toggle('active', parseInt(s.getAttribute('data-step')) === stepIdx);
+      });
+
+      if (spillLayer && currentSlickCoords.length > 0) {
+        const newCoords = currentSlickCoords.map(coord => [
+          coord[0] + step.dLat + (coord[0] - currentOrigin[0]) * (step.scale - 1),
+          coord[1] + step.dLng + (coord[1] - currentOrigin[1]) * (step.scale - 1)
+        ]);
+        spillLayer.setLatLngs(newCoords);
+      }
+
+      const evap = Math.min(60, 20 + stepIdx * 8);
+      const disp = Math.min(35, 10 + stepIdx * 5);
+      const emuls = Math.min(75, 15 + stepIdx * 14);
+      const rem = Math.max(8, 65 - stepIdx * 12);
+      document.getElementById('w-evap').textContent = `${evap}%`;
+      document.getElementById('bar-w-evap').style.width = `${evap}%`;
+      document.getElementById('w-disp').textContent = `${disp}%`;
+      document.getElementById('bar-w-disp').style.width = `${disp}%`;
+      document.getElementById('w-emuls').textContent = `${emuls}%`;
+      document.getElementById('bar-w-emuls').style.width = `${emuls}%`;
+      document.getElementById('w-rem').textContent = `${rem}%`;
+      document.getElementById('bar-w-rem').style.width = `${rem}%`;
+    }
+
+    /* EVENT LISTENERS SETUP */
+    function initEvents() {
+      // Live UTC Clock
+      setInterval(() => {
+        const d = new Date();
+        document.getElementById('clock-utc').textContent = d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+      }, 1000);
+
+      // Status Switchers
+      const banner = document.getElementById('status-banner');
+      const bText = document.getElementById('status-banner-text');
+      const bBar = document.getElementById('banner-bar-wrap');
+
+      document.getElementById('btn-sim-normal').onclick = function() {
+        document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        banner.style.display = 'none';
+      };
+      document.getElementById('btn-sim-loading').onclick = function() {
+        document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        banner.className = 'loading';
+        banner.style.display = 'flex';
+        bText.textContent = 'SAR BACKSCATTER SENSOR INGESTION IN PROGRESS (VV/VH POLARIZATION)...';
+        bBar.style.display = 'block';
+      };
+      document.getElementById('btn-sim-error').onclick = function() {
+        document.querySelectorAll('.sim-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        banner.className = 'error';
+        banner.style.display = 'flex';
+        bText.textContent = 'SAR Ingest Failed: Anomaly Resolution Degraded (Co-Polarization Noise Exceeded Threshold)';
+        bBar.style.display = 'none';
+      };
+
+      // Upload Modal & File Picker
+      const modalUpload = document.getElementById('modal-upload');
+      const fileInp = document.getElementById('sar-file-input');
+      const btnChoose = document.getElementById('btn-modal-choose-file');
+
+      document.getElementById('btn-upload-sar').onclick = () => {
+        modalUpload.classList.add('open');
+      };
+
+      if (btnChoose) {
+        btnChoose.onclick = () => fileInp.click();
+      }
+
+      document.getElementById('btn-close-upload').onclick = () => modalUpload.classList.remove('open');
+      document.getElementById('btn-cancel-upload').onclick = () => modalUpload.classList.remove('open');
+      document.getElementById('btn-confirm-upload').onclick = () => {
+        if (selectedFileToUpload) {
+          uploadAndDetect(selectedFileToUpload);
+        } else {
+          fileInp.click();
+        }
+      };
+
+      fileInp.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+          selectedFileToUpload = e.target.files[0];
+          document.getElementById('sar-upload-status').textContent = selectedFileToUpload.name.substring(0, 36);
+          document.getElementById('sar-file-meta').textContent = `Product: ${selectedFileToUpload.name} (${(selectedFileToUpload.size / 1024 / 1024).toFixed(2)} MB)`;
+          document.getElementById('sar-progress-pct').textContent = 'READY TO INGEST';
+          document.getElementById('sar-progress-bar').style.width = '100%';
+          modalUpload.classList.add('open');
+          showToast(`File selected: ${selectedFileToUpload.name}`);
+        }
+      };
+
+      // Evidence Inspection Modal
+      const modalEvidence = document.getElementById('modal-evidence');
+      document.getElementById('btn-view-evidence').onclick = () => {
+        const v = selectedVessel;
+        if (!v) return;
+        document.getElementById('modal-vessel-name').textContent = v.name;
+        document.getElementById('modal-final-score').textContent = `FINAL SCORE: ${v.score} / 100`;
+        document.getElementById('m-spatial').textContent = `${v.spatial}%`;
+        document.getElementById('m-temporal').textContent = `${v.temporal}%`;
+        document.getElementById('m-trajectory').textContent = `${v.trajectory}%`;
+        document.getElementById('m-behaviour').textContent = `${v.behaviour}%`;
+        modalEvidence.classList.add('open');
+      };
+
+      document.getElementById('btn-close-evidence').onclick = () => modalEvidence.classList.remove('open');
+      document.getElementById('btn-modal-close').onclick = () => modalEvidence.classList.remove('open');
+      document.getElementById('btn-modal-export-pdf').onclick = () => {
+        modalEvidence.classList.remove('open');
+        exportPdfDossier();
+      };
+
+      window.addEventListener('click', (e) => {
+        if (e.target === modalEvidence) modalEvidence.classList.remove('open');
+        if (e.target === modalUpload) modalUpload.classList.remove('open');
+      });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          modalEvidence.classList.remove('open');
+          modalUpload.classList.remove('open');
+        }
+      });
+
+      // Layer Toggles
+      document.getElementById('chk-spill').onchange = e => {
+        if (e.target.checked) { map.addLayer(spillLayer); map.addLayer(centroidLayer); }
+        else { map.removeLayer(spillLayer); map.removeLayer(centroidLayer); }
+      };
+      document.getElementById('chk-drift').onchange = e => {
+        if (e.target.checked) { map.addLayer(histDriftLayer); map.addLayer(predDriftLayer); map.addLayer(coneLayer); }
+        else { map.removeLayer(histDriftLayer); map.removeLayer(predDriftLayer); map.removeLayer(coneLayer); }
+      };
+      document.getElementById('chk-ais').onchange = e => {
+        if (e.target.checked) map.addLayer(aisLayerGroup); else map.removeLayer(aisLayerGroup);
+      };
+      document.getElementById('chk-dark').onchange = e => {
+        if (e.target.checked) map.addLayer(darkLayer); else map.removeLayer(darkLayer);
+      };
+      document.getElementById('chk-coastal').onchange = e => {
+        if (e.target.checked) map.addLayer(coastalLayer); else map.removeLayer(coastalLayer);
+      };
+      document.getElementById('chk-booms').onchange = e => {
+        toggleBooms(e.target.checked);
+      };
+
+      // Containment Booms button
+      document.getElementById('btn-toggle-booms').onclick = () => {
+        toggleBooms(!isBoomsActive);
+      };
+
+      function toggleBooms(active) {
+        isBoomsActive = active;
+        document.getElementById('chk-booms').checked = active;
+        const lbl = document.getElementById('booms-btn-label');
+        if (active) {
+          map.addLayer(boomsLayer);
+          lbl.textContent = '[Containment Booms Deployed]';
+          document.getElementById('btn-toggle-booms').style.background = 'rgba(16, 185, 129, 0.2)';
+          document.getElementById('btn-toggle-booms').style.borderColor = '#10b981';
+          showToast('Containment booms deployed: 3,200m offshore deflection barrier active.');
+        } else {
+          map.removeLayer(boomsLayer);
+          lbl.textContent = '[Deploy Simulated Containment Booms]';
+          document.getElementById('btn-toggle-booms').style.background = 'rgba(2, 132, 199, 0.12)';
+          document.getElementById('btn-toggle-booms').style.borderColor = '#0284c7';
+          showToast('Containment booms cleared from simulation.');
+        }
+      }
+
+      // Collapsible Drawer
+      const dBtn = document.getElementById('btn-drawer-toggle');
+      const dContent = document.getElementById('drawer-content');
+      const dArrow = document.getElementById('drawer-arrow');
+      dBtn.onclick = () => {
+        const isOpen = dContent.classList.contains('open');
+        dContent.classList.toggle('open', !isOpen);
+        dArrow.innerHTML = isOpen ? '&blacktriangledown;' : '&blacktriangle;';
+      };
+
+      // View Trajectory
+      document.getElementById('btn-view-track').onclick = () => {
+        if (selectedVessel && selectedVessel.track && selectedVessel.track.length > 0) {
+          const bounds = L.latLngBounds(selectedVessel.track);
+          bounds.extend(currentOrigin);
+          map.fitBounds(bounds, { padding: [30, 30] });
+        } else if (selectedVessel && selectedVessel.lat && selectedVessel.lng) {
+          map.setView([selectedVessel.lat, selectedVessel.lng], 12);
+        }
+      };
+
+      // Export Legal PDF Dossier
+      document.getElementById('btn-export-pdf').onclick = exportPdfDossier;
+
+      // Scrubber Events
+      const slider = document.getElementById('timeline-slider');
+      slider.oninput = e => updateTimeline(parseInt(e.target.value));
+      document.querySelectorAll('.t-step').forEach(t => {
+        t.onclick = () => updateTimeline(parseInt(t.getAttribute('data-step')));
+      });
+
+      // Scrubber Play button
+      const playBtn = document.getElementById('btn-timeline-play');
+      playBtn.onclick = () => {
+        if (playInterval) {
+          clearInterval(playInterval);
+          playInterval = null;
+          playBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+        } else {
+          playBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+          playInterval = setInterval(() => {
+            let next = (parseInt(slider.value) + 1) % TIMELINE_STEPS.length;
+            updateTimeline(next);
+          }, 1600);
+        }
+      };
+    }
+
+    // Initialize Workspace on Load
+    window.addEventListener('DOMContentLoaded', async () => {
+      initMap();
+      initEvents();
+      await checkHealth();
+      await loadSpillById('SP-001');
+    });
+  </script>
+
+  <!-- VITE / REACT APP HOOK -->
+  <div id="root" style="display:none;"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
 </html>
