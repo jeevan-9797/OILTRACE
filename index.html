@@ -138,20 +138,58 @@
     }
 
     /* MAP OVERLAYS & LEGEND */
-    .map-box-floating {
-      position: absolute; z-index: 500; background: rgba(15, 23, 42, 0.94);
-      border: 1px solid var(--border-subtle); border-radius: 6px; padding: 10px 12px;
-      backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.7);
-    }
-    #layer-toggle-box { top: 12px; right: 12px; width: 195px; }
-    #map-legend-box { bottom: 12px; left: 12px; width: 230px; font-size: 11px; }
-    .box-header {
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-      color: var(--text-dim); margin-bottom: 6px; padding-bottom: 4px;
-      border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between;
-    }
-    .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; cursor: pointer; }
-    .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+   .map-box-floating {
+  position: absolute;
+  z-index: 500;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 7px 9px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+}
+
+#layer-toggle-box {
+  top: 10px;
+  right: 10px;
+  width: 165px;
+}
+
+#map-legend-box {
+  bottom: 10px;
+  left: 10px;
+  width: 195px;
+  font-size: 9px;
+}
+
+.box-header {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  justify-content: space-between;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  margin-bottom: 3px;
+  cursor: pointer;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
     .swatch { width: 14px; height: 7px; border-radius: 2px; flex-shrink: 0; }
     .swatch-spill { background: rgba(168, 85, 247, 0.5); border: 1.5px solid #c084fc; }
     .swatch-centroid { width: 8px; height: 8px; border-radius: 50%; background: var(--red-alert); border: 1px solid #fff; }
