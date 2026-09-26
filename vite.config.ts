@@ -22,16 +22,10 @@ export default defineConfig(() => {
         '/api': {
           target: backendTarget,
           changeOrigin: true,
-          headers: {
-            Origin: 'https://oil-trace-two.vercel.app',
-          },
         },
         '/health': {
           target: backendTarget,
           changeOrigin: true,
-          headers: {
-            Origin: 'https://oil-trace-two.vercel.app',
-          },
         },
       },
     },
@@ -40,16 +34,10 @@ export default defineConfig(() => {
         '/api': {
           target: backendTarget,
           changeOrigin: true,
-          headers: {
-            Origin: 'https://oil-trace-two.vercel.app',
-          },
         },
         '/health': {
           target: backendTarget,
           changeOrigin: true,
-          headers: {
-            Origin: 'https://oil-trace-two.vercel.app',
-          },
         },
       },
     },
