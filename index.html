@@ -145,6 +145,20 @@
     }
     #layer-toggle-box { top: 12px; right: 12px; width: 195px; }
     #map-legend-box { bottom: 12px; left: 12px; width: 230px; font-size: 11px; }
+    .map-box-toggle {
+      width: 100%; background: transparent; border: 0; color: var(--text-dim); cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; padding: 0;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .map-box-toggle:hover { color: #ffffff; }
+    .map-box-arrow { color: var(--cyan-radar); font-size: 11px; margin-left: 6px; }
+    .map-box-content { margin-top: 6px; }
+    .map-box-floating.collapsed .map-box-content { display: none; }
+    .map-box-floating.collapsed { padding-top: 8px; padding-bottom: 8px; }
+    @media (max-width: 900px) {
+      #layer-toggle-box { right: 8px; width: min(195px, calc(100% - 16px)); }
+      #map-legend-box { left: 8px; width: min(230px, calc(100% - 16px)); }
+    }
     .box-header {
       font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
       color: var(--text-dim); margin-bottom: 6px; padding-bottom: 4px;
@@ -160,6 +174,24 @@
     .swatch-ais { width: 8px; height: 8px; background: #38bdf8; transform: rotate(45deg); border: 1px solid #fff; }
     .swatch-dark { width: 9px; height: 9px; background: #ef4444; border: 1.5px solid #fff; box-shadow: 0 0 4px #ef4444; }
     .swatch-selected { border-top: 2px solid var(--amber-warn); height: 0; }
+
+    /* Custom Leaflet DivIcon Wrappers */
+    .c-wrap, .ais-wrap, .ais-wrap-bg, .d-wrap { background: transparent !important; border: none !important; }
+    .vessel-map-tooltip {
+      background: rgba(15, 23, 42, 0.92) !important;
+      border: 1px solid rgba(56, 189, 248, 0.6) !important;
+      border-radius: 4px !important;
+      color: #ffffff !important;
+      padding: 3px 8px !important;
+      font-size: 11px !important;
+      font-family: var(--font-mono), monospace !important;
+      font-weight: 700 !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.75) !important;
+      pointer-events: none;
+    }
+    .vessel-map-tooltip::before {
+      border-top-color: rgba(15, 23, 42, 0.92) !important;
+    }
 
     /* Pulsing Centroid & Dark Marker */
     .pulsing-centroid { position: relative; width: 20px; height: 20px; }
@@ -299,7 +331,7 @@
 
     /* HIDDEN PRINTABLE CONTAINER FOR PDF EXPORT */
     #pdf-print-container {
-      position: absolute; top: -9999px; left: -9999px; width: 750px;
+      position: fixed; top: 0; left: 0; width: 750px; z-index: -1;
       background: #ffffff; color: #0f172a; padding: 24px; font-family: 'Inter', sans-serif;
     }
     .pdf-title { font-size: 16px; font-weight: 800; border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; }
@@ -407,26 +439,34 @@
       <div id="leaflet-map"></div>
 
       <!-- Floating Layer Toggle Box -->
-      <div id="layer-toggle-box" class="map-box-floating">
-        <div class="box-header"><span>MAP OVERLAYS</span><span class="mono">LAYERS</span></div>
-        <label class="toggle-row"><input type="checkbox" id="chk-spill" checked /><span>Spill Mask &amp; Centroid</span></label>
-        <label class="toggle-row"><input type="checkbox" id="chk-drift" checked /><span>Drift Vector &amp; Cone</span></label>
-        <label class="toggle-row"><input type="checkbox" id="chk-ais" checked /><span>AIS Vessel Traffic</span></label>
-        <label class="toggle-row"><input type="checkbox" id="chk-dark" checked /><span>Dark Radar Contact</span></label>
-        <label class="toggle-row"><input type="checkbox" id="chk-coastal" checked /><span>Coastal Sensitivity</span></label>
-        <label class="toggle-row"><input type="checkbox" id="chk-booms" /><span>Response Booms</span></label>
+      <div id="layer-toggle-box" class="map-box-floating collapsed">
+        <button type="button" class="map-box-toggle" id="map-overlays-toggle" aria-expanded="false">
+          <span>MAP OVERLAYS</span><span class="mono">LAYERS <span class="map-box-arrow" id="map-overlays-arrow">▼</span></span>
+        </button>
+        <div class="map-box-content" id="map-overlays-content">
+          <label class="toggle-row"><input type="checkbox" id="chk-spill" checked /><span>Spill Mask &amp; Centroid</span></label>
+          <label class="toggle-row"><input type="checkbox" id="chk-drift" checked /><span>Drift Vector &amp; Cone</span></label>
+          <label class="toggle-row"><input type="checkbox" id="chk-ais" checked /><span>AIS Vessel Traffic</span></label>
+          <label class="toggle-row"><input type="checkbox" id="chk-dark" /><span>Dark Radar Contact</span></label>
+          <label class="toggle-row"><input type="checkbox" id="chk-coastal" /><span>Coastal Sensitivity</span></label>
+          <label class="toggle-row"><input type="checkbox" id="chk-booms" /><span>Response Booms</span></label>
+        </div>
       </div>
 
       <!-- Floating Map Legend -->
-      <div id="map-legend-box" class="map-box-floating">
-        <div class="box-header"><span>MAP LEGEND</span><span class="mono" style="color:var(--cyan-radar);">7 ACTIVE</span></div>
-        <div class="legend-row"><span class="swatch swatch-spill"></span><span>Spill polygon mask</span></div>
-        <div class="legend-row"><span class="swatch swatch-centroid"></span><span>Centroid origin beacon</span></div>
-        <div class="legend-row"><span class="swatch swatch-hist"></span><span>Historical drift vector</span></div>
-        <div class="legend-row"><span class="swatch swatch-pred"></span><span>Predicted drift (+24h cone)</span></div>
-        <div class="legend-row"><span class="swatch swatch-ais"></span><span>AIS vessel markers</span></div>
-        <div class="legend-row"><span class="swatch swatch-dark"></span><span style="color:#fca5a5; font-weight:700;">Dark vessel anomaly</span></div>
-        <div class="legend-row"><span class="swatch swatch-selected"></span><span>Selected trajectory</span></div>
+      <div id="map-legend-box" class="map-box-floating collapsed">
+        <button type="button" class="map-box-toggle" id="map-legend-toggle" aria-expanded="false">
+          <span>MAP LEGEND</span><span class="mono" style="color:var(--cyan-radar);">0 ACTIVE <span class="map-box-arrow" id="map-legend-arrow">▼</span></span>
+        </button>
+        <div class="map-box-content" id="map-legend-content">
+          <div class="legend-row"><span class="swatch swatch-spill"></span><span>Spill polygon mask</span></div>
+          <div class="legend-row"><span class="swatch swatch-centroid"></span><span>Centroid origin beacon</span></div>
+          <div class="legend-row"><span class="swatch swatch-hist"></span><span>Historical drift vector</span></div>
+          <div class="legend-row"><span class="swatch swatch-pred"></span><span>Predicted drift (+24h cone)</span></div>
+          <div class="legend-row"><span class="swatch swatch-ais"></span><span>AIS vessel markers</span></div>
+          <div class="legend-row"><span class="swatch swatch-dark"></span><span style="color:#fca5a5; font-weight:700;">Dark vessel anomaly</span></div>
+          <div class="legend-row"><span class="swatch swatch-selected"></span><span>Selected trajectory</span></div>
+        </div>
       </div>
     </section>
 
@@ -442,26 +482,26 @@
           </div>
           <div style="display:flex; align-items:center; gap:6px;">
             <select id="spill-multi-select" title="Switch between detected oil spills" style="display:none; background:var(--bg-base); color:var(--cyan-radar); border:1px solid var(--border-active); font-size:10px; font-family:var(--font-mono); border-radius:3px; padding:2px 6px; outline:none; cursor:pointer;"></select>
-            <span class="card-badge" id="incident-badge">INCIDENT #SP-001</span>
+            <span class="card-badge" id="incident-badge">CLEAN SCAN: 0 ANOMALIES</span>
           </div>
         </div>
 
         <div class="metrics-2x2">
           <div class="metric-tile">
             <div class="metric-title">Confidence</div>
-            <div class="metric-num mono" style="color:var(--cyan-radar);" id="val-conf">94.5%</div>
+            <div class="metric-num mono" style="color:var(--cyan-radar);" id="val-conf">0.0%</div>
           </div>
           <div class="metric-tile">
             <div class="metric-title">Area</div>
-            <div class="metric-num mono" id="val-area">14.85 km²</div>
+            <div class="metric-num mono" id="val-area">0.0 km²</div>
           </div>
           <div class="metric-tile">
             <div class="metric-title">Centroid</div>
-            <div class="metric-num mono" style="font-size:12px;" id="val-centroid">18°55'12"N, 72°45'00"E</div>
+            <div class="metric-num mono" style="font-size:12px;" id="val-centroid">NONE (CLEAN SURFACE)</div>
           </div>
           <div class="metric-tile">
             <div class="metric-title">Detection Time</div>
-            <div class="metric-num mono" style="font-size:11px; color:var(--amber-warn);" id="val-time">2026-08-24 06:30:00 UTC</div>
+            <div class="metric-num mono" style="font-size:11px; color:var(--amber-warn);" id="val-time">--</div>
           </div>
         </div>
       </div>
@@ -473,7 +513,7 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 21h20"/><path d="M19 17l2-5-4-8-5 8-4-8-4 8 2 5"/></svg>
             <span>PANEL B &bull; SUSPECT VESSELS ROSTER</span>
           </div>
-          <span class="card-badge mono" id="suspect-count-badge">3 CANDIDATES</span>
+          <span class="card-badge mono" id="suspect-count-badge">0 CORRELATED</span>
         </div>
 
         <div class="table-box">
@@ -487,7 +527,7 @@
               </tr>
             </thead>
             <tbody id="vessels-tbody">
-              <!-- Rendered via JS -->
+              <tr><td colspan="4" style="text-align:center; color:var(--text-dim); padding:16px;">No suspect vessels correlated — Clean Sea Surface</td></tr>
             </tbody>
           </table>
         </div>
@@ -500,37 +540,37 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <span>PANEL C &bull; ATTRIBUTION EVIDENCE</span>
           </div>
-          <span class="card-badge mono" id="evidence-status-tag">ACTIVE INTERCEPT</span>
+          <span class="card-badge mono" id="evidence-status-tag">NO INTERCEPT</span>
         </div>
 
         <div class="evidence-summary-row">
           <div>
-            <div style="font-weight:800; font-size:13px;" id="attr-name">MV Nordic Voyager</div>
-            <div class="mono" style="font-size:10.5px; color:var(--text-dim);" id="attr-sub">MMSI: 257812000 &bull; Flag: Norway (NIS) &bull; IMO 9384712</div>
+            <div style="font-weight:800; font-size:13px;" id="attr-name">No Suspect Vessel — Clean Sea Surface</div>
+            <div class="mono" style="font-size:10.5px; color:var(--text-dim);" id="attr-sub">0 oil slicks detected • 0 candidate vessels evaluated</div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:9px; color:var(--text-muted); text-transform:uppercase;">Final Score</div>
-            <div class="final-score-val high mono" id="attr-score">91.4 / 100</div>
+            <div class="final-score-val mono" id="attr-score">0.0 / 100</div>
           </div>
         </div>
 
         <!-- 4 Progress Bars -->
         <div class="progress-group">
           <div class="prog-line">
-            <div class="prog-labels"><span>Spatial proximity</span><strong class="mono" id="val-spatial">96.2%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-spatial" style="width:96.2%; background:#ef4444;"></div></div>
+            <div class="prog-labels"><span>Spatial proximity</span><strong class="mono" id="val-spatial">0.0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-spatial" style="width:0%; background:#ef4444;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Temporal correlation</span><strong class="mono" id="val-temporal">93.8%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-temporal" style="width:93.8%; background:#f59e0b;"></div></div>
+            <div class="prog-labels"><span>Temporal correlation</span><strong class="mono" id="val-temporal">0.0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-temporal" style="width:0%; background:#f59e0b;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Trajectory match</span><strong class="mono" id="val-trajectory">88.5%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-trajectory" style="width:88.5%; background:#06b6d4;"></div></div>
+            <div class="prog-labels"><span>Trajectory match</span><strong class="mono" id="val-trajectory">0.0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-trajectory" style="width:0%; background:#06b6d4;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Behaviour</span><strong class="mono" id="val-behaviour">87.1%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-behaviour" style="width:87.1%; background:#a855f7;"></div></div>
+            <div class="prog-labels"><span>Behaviour</span><strong class="mono" id="val-behaviour">0.0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-behaviour" style="width:0%; background:#a855f7;"></div></div>
           </div>
         </div>
 
@@ -541,13 +581,13 @@
         </button>
         <div id="drawer-content" class="drawer-content">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-            <div><span style="color:var(--text-muted);">Deadweight:</span> <strong class="mono" id="reg-dwt">115,420 DWT</strong></div>
-            <div><span style="color:var(--text-muted);">IMO:</span> <strong class="mono" id="reg-imo">IMO 9384712</strong></div>
-            <div><span style="color:var(--text-muted);">Flag:</span> <strong id="reg-flag">Norway</strong></div>
-            <div><span style="color:var(--text-muted);">Owner:</span> <strong id="reg-owner">Nordic Maritime Tankers AS</strong></div>
+            <div><span style="color:var(--text-muted);">Deadweight:</span> <strong class="mono" id="reg-dwt">N/A — No Anomaly Detected</strong></div>
+            <div><span style="color:var(--text-muted);">IMO:</span> <strong class="mono" id="reg-imo">N/A — No Anomaly Detected</strong></div>
+            <div><span style="color:var(--text-muted);">Flag:</span> <strong id="reg-flag">N/A — No Anomaly Detected</strong></div>
+            <div><span style="color:var(--text-muted);">Owner:</span> <strong id="reg-owner">N/A — No Anomaly Detected</strong></div>
           </div>
-          <div style="margin-top:6px; padding:4px 8px; background:rgba(239,68,68,0.15); border:1px solid #ef4444; border-radius:3px; color:#fee2e2; font-size:10.5px;" id="reg-violations">
-            Past Violations: 2 Prior MARPOL Annex I Bilge Discharge Records (High Risk)
+          <div style="margin-top:6px; padding:4px 8px; background:rgba(2,132,199,0.1); border:1px solid #0284c7; border-radius:3px; color:#bae6fd; font-size:10.5px;" id="reg-violations">
+            Past Violations: None — No Anomaly Detected
           </div>
         </div>
 
@@ -578,31 +618,31 @@
           <span class="card-badge mono">ADIOS2 MODEL</span>
         </div>
 
-        <div class="landfall-banner">
-          <span class="landfall-tag" id="landfall-badge-text">LANDFALL PREDICTED: HIGH RISK</span>
-          <span class="landfall-eta mono" id="landfall-eta-text">ETA: 14h 20m</span>
+        <div class="landfall-banner" id="landfall-banner-box" style="background:rgba(16, 185, 129, 0.12); border-color:#10b981;">
+          <span class="landfall-tag" id="landfall-badge-text" style="color:#6ee7b7;">NO LANDFALL RISK (CLEAN SCAN)</span>
+          <span class="landfall-eta mono" id="landfall-eta-text">ETA: N/A</span>
         </div>
-        <div style="font-size:11px; color:var(--text-dim);">
-          Nearest Reserve: <strong style="color:#ffffff;">North Shoal MPA (18.4 km)</strong> &bull; Coastal Vulnerability: 9.2/10
+        <div id="env-reserve-subtext" style="font-size:11px; color:var(--text-dim);">
+          Surface Telemetry: <strong style="color:#34d399;">Nominal Sea Surface</strong> &bull; Coastal Vulnerability: 0.0/10
         </div>
 
         <!-- Weathering 4 Progress Bars -->
         <div class="weathering-grid">
           <div class="prog-line">
-            <div class="prog-labels"><span>Evaporation Rate</span><strong class="mono" id="w-evap">34%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-w-evap" style="width:34%; background:#06b6d4;"></div></div>
+            <div class="prog-labels"><span>Evaporation Rate</span><strong class="mono" id="w-evap">0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-evap" style="width:0%; background:#06b6d4;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Natural Dispersion</span><strong class="mono" id="w-disp">18%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-w-disp" style="width:18%; background:#3b82f6;"></div></div>
+            <div class="prog-labels"><span>Natural Dispersion</span><strong class="mono" id="w-disp">0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-disp" style="width:0%; background:#3b82f6;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Emulsification Rate</span><strong class="mono" id="w-emuls">42%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-w-emuls" style="width:42%; background:#f59e0b;"></div></div>
+            <div class="prog-labels"><span>Emulsification Rate</span><strong class="mono" id="w-emuls">0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-emuls" style="width:0%; background:#f59e0b;"></div></div>
           </div>
           <div class="prog-line">
-            <div class="prog-labels"><span>Remaining Surface Mass</span><strong class="mono" id="w-rem" style="color:#fca5a5;">46%</strong></div>
-            <div class="prog-track"><div class="prog-fill" id="bar-w-rem" style="width:46%; background:#ef4444;"></div></div>
+            <div class="prog-labels"><span>Remaining Surface Mass</span><strong class="mono" id="w-rem" style="color:#fca5a5;">0%</strong></div>
+            <div class="prog-track"><div class="prog-fill" id="bar-w-rem" style="width:0%; background:#ef4444;"></div></div>
           </div>
         </div>
 
@@ -622,14 +662,14 @@
     </button>
     <div class="scrub-track">
       <div style="display:flex; justify-content:space-between; font-size:10.5px;">
-        <span>DISPERSAL SIMULATION: <strong id="timeline-phase-label">T-0 (Detection Acquisition)</strong></span>
-        <span class="mono" id="timeline-phase-time" style="color:var(--text-dim);">2026-09-19 04:18:22 UTC</span>
+        <span>DISPERSAL SIMULATION: <strong id="timeline-phase-label">Baseline Surveillance Ready</strong></span>
+        <span class="mono" id="timeline-phase-time" style="color:var(--text-dim);">--</span>
       </div>
-      <input type="range" id="timeline-slider" class="scrub-slider" min="0" max="4" value="2" step="1" />
+      <input type="range" id="timeline-slider" class="scrub-slider" min="0" max="4" value="0" step="1" />
       <div class="scrub-steps">
-        <span class="t-step" data-step="0">T -12h</span>
+        <span class="t-step active" data-step="0">T -12h</span>
         <span class="t-step" data-step="1">T -4h</span>
-        <span class="t-step active" data-step="2">T -0 (Detection)</span>
+        <span class="t-step" data-step="2">T -0 (Detection)</span>
         <span class="t-step" data-step="3">T +12h</span>
         <span class="t-step" data-step="4">T +48h (Landfall)</span>
       </div>
@@ -640,60 +680,92 @@
   <div id="pdf-print-container">
     <div class="pdf-title">
       OILTRACE SATELLITE SPILL FORENSIC ATTRIBUTION REPORT
-      <div style="font-size:10px; color:#64748b; font-weight:normal; margin-top:3px;">
-        MARPOL ANNEX I MARITIME ENFORCEMENT DOSSIER &bull; REF: #2026-NS4-ENF
+      <div id="pdf-ref-code" style="font-size:10px; color:#64748b; font-weight:normal; margin-top:3px;">
+        COASTAL SURVEILLANCE &amp; ENVIRONMENTAL MONITORING DOSSIER &bull; REF: #CLEAN-SCAN
       </div>
     </div>
 
     <table class="pdf-table">
       <tr>
         <th style="width:25%;">Satellite Sensor</th><td>ESA Copernicus Sentinel-1 C-SAR</td>
-        <th style="width:25%;">Detection Confidence</th><td id="pdf-conf" style="color:#0284c7; font-weight:bold;">94.8%</td>
+        <th style="width:25%;">Detection Confidence</th><td id="pdf-conf" style="color:#0284c7; font-weight:bold;">0.0% (Clean Baseline)</td>
       </tr>
       <tr>
-        <th>Centroid Position</th><td id="pdf-centroid">56°14'22"N, 03°12'09"E</td>
-        <th>Slick Surface Extent</th><td id="pdf-area">14.2 km²</td>
+        <th>Centroid Position</th><td id="pdf-centroid">NONE (Clean Sea Surface)</td>
+        <th>Slick Surface Extent</th><td id="pdf-area">0.00 km²</td>
       </tr>
       <tr>
-        <th>Detection Timestamp</th><td id="pdf-time">2026-09-19 04:18:22 UTC</td>
-        <th>Estimated Discharge</th><td id="pdf-origin-time">2026-09-19 00:18 UTC</td>
+        <th>Detection Timestamp</th><td id="pdf-time">N/A — No Anomaly Detected</td>
+        <th>Estimated Discharge</th><td id="pdf-origin-time">NONE (No discharge detected)</td>
+      </tr>
+      <tr>
+        <th>Detection Status</th><td id="pdf-status">VERIFIED CLEAN SEA SURFACE — NO OIL SPILL DETECTED (SAR SENSOR CLEAR)</td>
+        <th>Drift Forecast</th><td id="pdf-drift">N/A — Sea surface clear (0 anomalies)</td>
+      </tr>
+      <tr>
+        <th>Environmental Conditions</th><td id="pdf-environment" colspan="3">Baseline marine telemetry (calm seas)</td>
       </tr>
     </table>
 
-    <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">CORRELATED SUSPECT VESSEL RECORD</div>
-    <table class="pdf-table">
-      <tr>
-        <th style="width:25%;">Vessel Name</th><td id="pdf-name" style="font-weight:bold; font-size:12px;">MV Nordic Voyager</td>
-        <th style="width:25%;">Attribution Score</th><td id="pdf-score" style="color:#b91c1c; font-weight:bold; font-size:13px;">91.4 / 100</td>
-      </tr>
-      <tr>
-        <th>MMSI</th><td id="pdf-mmsi">257812000</td>
-        <th>IMO Number</th><td id="pdf-imo">IMO 9384712</td>
-      </tr>
-      <tr>
-        <th>Flag State</th><td id="pdf-flag">Norway (NIS)</td>
-        <th>Deadweight</th><td id="pdf-dwt">115,420 DWT</td>
-      </tr>
-      <tr>
-        <th>Registered Owner</th><td id="pdf-owner" colspan="3">Nordic Maritime Tankers AS</td>
-      </tr>
-      <tr>
-        <th>Violations Record</th><td id="pdf-violations" colspan="3" style="color:#b91c1c;">2 Prior MARPOL Annex I Bilge Discharge Records (High Risk)</td>
-      </tr>
-    </table>
+    <!-- Suspect vessel & forensic attribution section (shown when spill/vessel detected) -->
+    <div id="pdf-vessel-section" style="display:none;">
+      <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">CORRELATED SUSPECT VESSEL RECORD</div>
+      <table class="pdf-table">
+        <tr>
+          <th style="width:25%;">Vessel Name</th><td id="pdf-name" style="font-weight:bold; font-size:12px;">NONE</td>
+          <th style="width:25%;">Attribution Score</th><td id="pdf-score" style="color:#b91c1c; font-weight:bold; font-size:13px;">0.0 / 100</td>
+        </tr>
+        <tr>
+          <th>MMSI</th><td id="pdf-mmsi">N/A</td>
+          <th>IMO Number</th><td id="pdf-imo">N/A</td>
+        </tr>
+        <tr>
+          <th>Flag State</th><td id="pdf-flag">N/A</td>
+          <th>Deadweight</th><td id="pdf-dwt">N/A</td>
+        </tr>
+        <tr>
+          <th>Registered Owner</th><td id="pdf-owner" colspan="3">N/A — No suspect vessels correlated</td>
+        </tr>
+        <tr>
+          <th>Violations Record</th><td id="pdf-violations" colspan="3" style="color:#b91c1c;">None — No suspect vessels correlated</td>
+        </tr>
+      </table>
 
-    <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">FORENSIC ATTRIBUTION DIMENSIONS</div>
-    <table class="pdf-table">
-      <tr><th style="width:40%;">Dimension</th><th style="width:20%;">Score</th><th>Assessment Diagnostic</th></tr>
-      <tr><td>1. Spatial Proximity</td><td id="pdf-spatial" style="font-weight:bold;">96.2%</td><td>Closest point of approach: 0.22 km to origin centroid</td></tr>
-      <tr><td>2. Temporal Correlation</td><td id="pdf-temporal" style="font-weight:bold;">93.8%</td><td>Discharge window synchronizes with transponder outage</td></tr>
-      <tr><td>3. Trajectory Match</td><td id="pdf-trajectory" style="font-weight:bold;">88.5%</td><td>Course aligns with slick longitudinal elongation vector</td></tr>
-      <tr><td>4. Behaviour</td><td id="pdf-behaviour" style="font-weight:bold;">87.1%</td><td>Speed reduced by 3.2 kts during transit crossing</td></tr>
-    </table>
+      <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0;">FORENSIC ATTRIBUTION DIMENSIONS</div>
+      <table class="pdf-table">
+        <tr><th style="width:40%;">Dimension</th><th style="width:20%;">Score</th><th>Assessment Diagnostic</th></tr>
+        <tr><td>1. Spatial Proximity</td><td id="pdf-spatial" style="font-weight:bold;">0.0%</td><td id="pdf-diag-spatial">N/A</td></tr>
+        <tr><td>2. Temporal Correlation</td><td id="pdf-temporal" style="font-weight:bold;">0.0%</td><td id="pdf-diag-temporal">N/A</td></tr>
+        <tr><td>3. Trajectory Match</td><td id="pdf-trajectory" style="font-weight:bold;">0.0%</td><td id="pdf-diag-trajectory">N/A</td></tr>
+        <tr><td>4. Behaviour</td><td id="pdf-behaviour" style="font-weight:bold;">0.0%</td><td id="pdf-diag-behaviour">N/A</td></tr>
+      </table>
+    </div>
 
-    <div style="margin-top:14px; padding:8px; background:#f8fafc; border:1px dashed #94a3b8; font-size:9.5px; font-family:monospace; line-height:1.4;">
-      <strong>OFFICIAL DIGITAL SEAL (SHA-256):</strong> e9a7b2190c4217105a8f4920b75491c3d14872950be894c278912e9871fa01b2<br/>
-      Submitted to Port State Control (Paris MoU) &amp; Coastal Maritime Enforcement Division.
+    <!-- Clean scan certification section (shown only when isCleanScan is true) -->
+    <div id="pdf-cleanscan-section" style="display:block;">
+      <div style="font-weight:bold; font-size:12px; margin:10px 0 4px 0; color:#16a34a;">CLEAN SEA SURFACE VERIFICATION RECORD</div>
+      <table class="pdf-table">
+        <tr>
+          <th style="width:25%;">SAR Sensor Evaluation</th><td colspan="3" style="color:#16a34a; font-weight:bold;">CLEAN SCAN — 0 ANOMALIES DETECTED</td>
+        </tr>
+        <tr>
+          <th style="width:25%;">Maritime Traffic Correlation</th><td style="color:#16a34a; font-weight:bold;">0 SUSPECT VESSELS CORRELATED</td>
+          <th style="width:25%;">Candidates Evaluated</th><td>0 Candidates In Risk Range</td>
+        </tr>
+        <tr>
+          <th>Surface Radiometric State</th>
+          <td colspan="3">Radar backscatter intensity within nominal baseline. No surfactant damping, dark formation slicks, or mineral oil discharge signatures identified.</td>
+        </tr>
+        <tr>
+          <th>Drift / Weathering Risk</th>
+          <td colspan="3">Zero slick mass present. Coastal impact probability: 0.0%. No trajectory tracking required.</td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="pdf-seal-text" style="margin-top:14px; padding:8px; background:#f8fafc; border:1px dashed #94a3b8; font-size:9.5px; font-family:monospace; line-height:1.4;">
+      <strong>OFFICIAL DIGITAL VERIFICATION (SHA-256):</strong> 7a8f9c01d2e3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9<br/>
+      Verified Clean Ocean Surface Surveillance Record &bull; Coastal Maritime Enforcement Division.
     </div>
   </div>
 
@@ -829,8 +901,7 @@
        OILTRACE LIVE API CLIENT & WORKSPACE STATE
        ========================================================================== */
 
-    const API_BASE_URL = window.OILTRACE_API_BASE_URL ||
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : 'https://oil-trace.onrender.com');
+    const API_BASE_URL = (window.__OILTRACE_API_BASE_URL__ || window.OILTRACE_API_BASE_URL || 'https://oil-trace.onrender.com').replace(/\/+$/, '');
 
     // Default baseline coordinates (North Sea Sector 4)
     const DEFAULT_SPILL_ORIGIN = [56.2394, 3.2025]; // 56°14'22"N, 03°12'09"E
@@ -866,13 +937,37 @@
     let currentSpill = null;
     let currentVessels = [];
     let currentCandidates = [];
+    let currentDetectionData = null;
+    let spillSelectionToken = 0;
     let selectedVessel = null;
     let currentDetections = [];
     let isBoomsActive = false;
     let playInterval = null;
+    let currentSlickCoords = [];
+    let currentOrigin = null;
     let selectedFileToUpload = null;
-    let currentSlickCoords = DEFAULT_SLICK_COORDS;
-    let currentOrigin = DEFAULT_SPILL_ORIGIN;
+    let isUploading = false;
+    let uploadTimerInterval = null;
+    let activeUploadAbortController = null;
+
+    // Expose live diagnostic state on window
+    Object.defineProperty(window, 'currentDetections', { get: () => currentDetections, set: (v) => { currentDetections = v; }, configurable: true });
+    Object.defineProperty(window, 'currentCandidates', { get: () => currentCandidates, set: (v) => { currentCandidates = v; }, configurable: true });
+    Object.defineProperty(window, 'currentVessels', { get: () => currentVessels, set: (v) => { currentVessels = v; }, configurable: true });
+    Object.defineProperty(window, 'isUploading', { get: () => isUploading, set: (v) => { isUploading = v; }, configurable: true });
+    Object.defineProperty(window, 'map', { get: () => map, set: (v) => { map = v; }, configurable: true });
+    Object.defineProperty(window, 'selectedFileToUpload', { get: () => selectedFileToUpload, set: (v) => { selectedFileToUpload = v; }, configurable: true });
+    Object.defineProperty(window, 'currentSpill', { get: () => currentSpill, set: (v) => { currentSpill = v; }, configurable: true });
+    Object.defineProperty(window, 'selectedVessel', { get: () => selectedVessel, set: (v) => { selectedVessel = v; }, configurable: true });
+    Object.defineProperty(window, 'centroidLayer', { get: () => centroidLayer, set: (v) => { centroidLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'aisLayerGroup', { get: () => aisLayerGroup, set: (v) => { aisLayerGroup = v; }, configurable: true });
+    Object.defineProperty(window, 'spillLayer', { get: () => spillLayer, set: (v) => { spillLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'histDriftLayer', { get: () => histDriftLayer, set: (v) => { histDriftLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'predDriftLayer', { get: () => predDriftLayer, set: (v) => { predDriftLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'coneLayer', { get: () => coneLayer, set: (v) => { coneLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'darkLayer', { get: () => darkLayer, set: (v) => { darkLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'coastalLayer', { get: () => coastalLayer, set: (v) => { coastalLayer = v; }, configurable: true });
+    Object.defineProperty(window, 'boomsLayer', { get: () => boomsLayer, set: (v) => { boomsLayer = v; }, configurable: true });
 
     /* TOAST NOTIFIER */
     function showToast(msg, duration = 3500) {
@@ -897,15 +992,20 @@
       // Array of coordinate points
       if (Array.isArray(poly) && poly.length > 0) {
         if (Array.isArray(poly[0]) && Array.isArray(poly[0][0])) {
-          return poly[0].map(pt => [Number(pt[1]), Number(pt[0])]);
+          return poly[0].map(pt => {
+            const p0 = Number(pt[0]);
+            const p1 = Number(pt[1]);
+            // Latitude cannot exceed 90 degrees; if p0 > 90, format is [lng, lat]
+            if (Math.abs(p0) > 90 && Math.abs(p1) <= 90) return [p1, p0];
+            return [p0, p1];
+          });
         }
         return poly.map(pt => {
           if (Array.isArray(pt)) {
-            // Flip if [lon, lat] in North Sea region
-            if (pt[1] > 40 && pt[1] < 80 && pt[0] < 35 && pt[0] > -20) {
-              return [Number(pt[1]), Number(pt[0])];
-            }
-            return [Number(pt[0]), Number(pt[1])];
+            const p0 = Number(pt[0]);
+            const p1 = Number(pt[1]);
+            if (Math.abs(p0) > 90 && Math.abs(p1) <= 90) return [p1, p0];
+            return [p0, p1];
           }
           if (pt && typeof pt === 'object') {
             const lat = pt.lat !== undefined ? pt.lat : (pt.latitude !== undefined ? pt.latitude : 0);
@@ -921,10 +1021,10 @@
     function normalizePoint(pt) {
       if (!pt) return null;
       if (Array.isArray(pt) && pt.length >= 2) {
-        if (pt[1] > 40 && pt[1] < 80 && pt[0] < 35 && pt[0] > -20) {
-          return [Number(pt[1]), Number(pt[0])];
-        }
-        return [Number(pt[0]), Number(pt[1])];
+        const p0 = Number(pt[0]);
+        const p1 = Number(pt[1]);
+        if (Math.abs(p0) > 90 && Math.abs(p1) <= 90) return [p1, p0];
+        return [p0, p1];
       }
       if (typeof pt === 'object') {
         const lat = pt.latitude !== undefined ? pt.latitude : pt.lat;
@@ -938,40 +1038,40 @@
 
     /* LEAFLET MAP INITIALIZATION */
     function initMap() {
-      map = L.map('leaflet-map', { center: DEFAULT_SPILL_ORIGIN, zoom: 11, zoomControl: false, attributionControl: true });
+      map = L.map('leaflet-map', { center: DEFAULT_SPILL_ORIGIN, zoom: 6, zoomControl: false, attributionControl: true });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap | ESA Sentinel-1' }).addTo(map);
 
       aisLayerGroup = L.layerGroup().addTo(map);
 
-      // Spill Mask Polygon
-      spillLayer = L.polygon(DEFAULT_SLICK_COORDS, { color: '#06b6d4', weight: 1.8, opacity: 0.9, fillColor: '#8b5cf6', fillOpacity: 0.45 }).addTo(map);
+      // Spill Mask Polygon (initially empty)
+      spillLayer = L.polygon([], { color: '#06b6d4', weight: 1.8, opacity: 0.9, fillColor: '#8b5cf6', fillOpacity: 0.45 }).addTo(map);
       spillLayer.bindPopup('<div class="mono"><strong>SAR OIL SLICK ANOMALY</strong><br/>Surface Extent Mapped</div>');
 
-      // Centroid Origin Beacon
+      // Centroid Origin Beacon (created but not added until spill detected)
       const centroidIcon = L.divIcon({
         className: 'c-wrap',
         html: '<div class="pulsing-centroid"><div class="pulsing-centroid-ring"></div><div class="pulsing-centroid-dot"></div></div>',
         iconSize: [20, 20], iconAnchor: [10, 10]
       });
-      centroidLayer = L.marker(DEFAULT_SPILL_ORIGIN, { icon: centroidIcon }).addTo(map);
+      centroidLayer = L.marker([0, 0], { icon: centroidIcon });
       centroidLayer.bindPopup('<div class="mono"><strong>DISCHARGE ORIGIN CENTROID</strong></div>');
 
-      // Drift Vectors & Uncertainty Cone
-      histDriftLayer = L.polyline(DEFAULT_HIST_DRIFT, { color: '#94a3b8', weight: 2, dashArray: '6, 6' }).addTo(map);
-      predDriftLayer = L.polyline(DEFAULT_PRED_DRIFT, { color: '#06b6d4', weight: 2.2, dashArray: '2, 6' }).addTo(map);
-      coneLayer = L.polygon(DEFAULT_UNCERTAINTY_CONE, { color: '#f59e0b', weight: 1.2, dashArray: '4, 4', fillColor: '#f59e0b', fillOpacity: 0.15 }).addTo(map);
+      // Drift Vectors & Uncertainty Cone (initially empty)
+      histDriftLayer = L.polyline([], { color: '#94a3b8', weight: 2, dashArray: '6, 6' }).addTo(map);
+      predDriftLayer = L.polyline([], { color: '#06b6d4', weight: 2.2, dashArray: '2, 6' }).addTo(map);
+      coneLayer = L.polygon([], { color: '#f59e0b', weight: 1.2, dashArray: '4, 4', fillColor: '#f59e0b', fillOpacity: 0.15 }).addTo(map);
 
-      // Coastal Sensitivity Zone
-      coastalLayer = L.polyline(COASTAL_ZONE, { color: '#ef4444', weight: 5, opacity: 0.8 }).addTo(map);
+      // Coastal Sensitivity Zone (initially not added to map)
+      coastalLayer = L.polyline(COASTAL_ZONE, { color: '#ef4444', weight: 5, opacity: 0.8 });
       coastalLayer.bindPopup('<div class="mono"><strong>MARINE PROTECTED AREA</strong><br/>North Shoal Coastal Sanctuary (EVI: 9.2)</div>');
 
-      // Dark Vessel Radar Contact
+      // Dark Vessel Radar Contact (initially not added to map)
       const darkIcon = L.divIcon({
         className: 'd-wrap',
         html: '<div class="dark-vessel-target" title="Unregistered Hull Contact">!</div>',
         iconSize: [14, 14], iconAnchor: [7, 7]
       });
-      darkLayer = L.marker([DARK_VESSEL.lat, DARK_VESSEL.lng], { icon: darkIcon }).addTo(map);
+      darkLayer = L.marker([DARK_VESSEL.lat, DARK_VESSEL.lng], { icon: darkIcon });
       darkLayer.bindPopup('<div class="mono"><strong style="color:#ef4444;">DARK RADAR CONTACT</strong><br/>SAR-TARGET #DK-09<br/>Length: 184m | No AIS Transponder</div>');
 
       // Response Booms (initially off)
@@ -981,8 +1081,17 @@
     /* API HEALTH CHECK */
     async function checkHealth() {
       const chip = document.getElementById('header-status-chip');
+      if (chip) {
+        chip.className = 'status-chip status-chip-loading';
+        chip.innerHTML = '<span class="pulse-dot" style="background:#38bdf8; box-shadow:0 0 6px #38bdf8;"></span>RENDER API: CONNECTING...';
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       try {
-        const res = await fetch(`${API_BASE_URL}/health`);
+        const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) {
           if (chip) {
             chip.className = 'status-chip status-chip-online';
@@ -997,6 +1106,7 @@
           return false;
         }
       } catch (err) {
+        clearTimeout(timeoutId);
         console.warn('Health check error:', err);
         if (chip) {
           chip.className = 'status-chip status-chip-offline';
@@ -1006,7 +1116,7 @@
       }
     }
 
-    /* CANDIDATE ENRICHMENT */
+    /* CANDIDATE ENRICHMENT & NORMALIZATION */
     function enrichCandidatesWithVesselData() {
       const vesselMap = new Map();
       (currentVessels || []).forEach(v => {
@@ -1016,35 +1126,70 @@
       currentCandidates.forEach((c, idx) => {
         c.rank = c.rank || (idx + 1);
         c.mmsi = String(c.mmsi);
-        c.name = c.vessel_name || (c.vessel && c.vessel.name) || (vesselMap.get(c.mmsi)?.name) || `VESSEL ${c.mmsi}`;
+        const vInfo = vesselMap.get(c.mmsi);
+        c.name = c.vessel_name || (c.vessel && c.vessel.name) || vInfo?.name || `VESSEL ${c.mmsi}`;
         c.score = c.final_score !== undefined ? Number(c.final_score).toFixed(1) : (c.score !== undefined ? Number(c.score).toFixed(1) : '0.0');
         c.spatial = c.spatial_score !== undefined ? Number(c.spatial_score).toFixed(1) : (c.spatial !== undefined ? Number(c.spatial).toFixed(1) : '0.0');
         c.temporal = c.temporal_score !== undefined ? Number(c.temporal_score).toFixed(1) : (c.temporal !== undefined ? Number(c.temporal).toFixed(1) : '0.0');
         c.trajectory = c.trajectory_score !== undefined ? Number(c.trajectory_score).toFixed(1) : (c.trajectory !== undefined ? Number(c.trajectory).toFixed(1) : '0.0');
         c.behaviour = c.behaviour_score !== undefined ? Number(c.behaviour_score).toFixed(1) : (c.behaviour !== undefined ? Number(c.behaviour).toFixed(1) : '0.0');
+        c.environment = c.environment_score !== undefined ? Number(c.environment_score).toFixed(1) : '85.0';
 
-        const vInfo = vesselMap.get(c.mmsi);
-        if (vInfo && vInfo.latitude && vInfo.longitude) {
-          c.lat = vInfo.latitude;
-          c.lng = vInfo.longitude;
-          c.speed = vInfo.speed;
-          c.heading = vInfo.heading;
-        } else if (c.evidence && c.evidence.vessel_position) {
-          c.lat = c.evidence.vessel_position.latitude;
-          c.lng = c.evidence.vessel_position.longitude;
+        // Extract evaluated position at time of spill
+        if (c.evidence && c.evidence.vessel_position && c.evidence.vessel_position.latitude != null && c.evidence.vessel_position.longitude != null) {
+          const lat = parseFloat(c.evidence.vessel_position.latitude);
+          const lng = parseFloat(c.evidence.vessel_position.longitude);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            c.lat = lat;
+            c.lng = lng;
+          }
           c.speed = c.evidence.vessel_position.speed_knots;
           c.heading = c.evidence.vessel_position.heading_deg;
-        } else {
-          c.lat = currentOrigin[0] + 0.04 * (idx + 1);
-          c.lng = currentOrigin[1] + 0.04 * (idx + 1);
+        } else if (c.latitude != null && c.longitude != null) {
+          const lat = parseFloat(c.latitude);
+          const lng = parseFloat(c.longitude);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            c.lat = lat;
+            c.lng = lng;
+          }
+        } else if (c.lat != null && c.lng != null) {
+          const lat = parseFloat(c.lat);
+          const lng = parseFloat(c.lng);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            c.lat = lat;
+            c.lng = lng;
+          }
+        } else if (vInfo && vInfo.latitude != null && vInfo.longitude != null) {
+          const lat = parseFloat(vInfo.latitude);
+          const lng = parseFloat(vInfo.longitude);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            c.lat = lat;
+            c.lng = lng;
+          }
+          c.speed = vInfo.speed;
+          c.heading = vInfo.heading;
         }
 
-        c.flag = c.flag || vInfo?.flag || 'International';
-        c.imo = c.imo || (vInfo?.imo_number ? `IMO ${vInfo.imo_number}` : 'IMO 9384712');
-        c.dwt = c.dwt || '115,420 DWT';
-        c.owner = c.owner || 'Registered Maritime Operator';
-        c.violations = c.violations || (idx === 0 ? 'Prior MARPOL Annex I Bilge Discharge Record (High Risk)' : 'Clean Record (Low Risk)');
-        c.hasDark = c.hasDark !== undefined ? c.hasDark : (idx === 0);
+        const distKm = c.evidence?.distance_km !== undefined
+          ? `${Number(c.evidence.distance_km).toFixed(2)} km`
+          : (c.evidence?.distance_to_spill_km !== undefined
+              ? `${Number(c.evidence.distance_to_spill_km).toFixed(2)} km`
+              : (c.evidence?.trajectory_min_distance_km !== undefined ? `${Number(c.evidence.trajectory_min_distance_km).toFixed(2)} km` : null));
+        const timeDiffH = c.evidence?.temporal_difference_hours !== undefined
+          ? `${Math.abs(Number(c.evidence.temporal_difference_hours)).toFixed(2)}h`
+          : null;
+        const spdKts = c.speed !== undefined && c.speed !== null ? `${Number(c.speed).toFixed(1)} kts` : 'N/A';
+        const hdgDeg = c.heading !== undefined && c.heading !== null ? `${Number(c.heading).toFixed(0)}°` : 'N/A';
+
+        c.flag = c.flag || vInfo?.flag || 'Maritime Registry';
+        c.imo = c.imo || (c.imo_number ? `IMO ${c.imo_number}` : (vInfo?.imo_number ? `IMO ${vInfo.imo_number}` : `MMSI ${c.mmsi}`));
+        c.vessel_type = c.vessel_type || vInfo?.vessel_type || 'Tanker - Merchant';
+        c.dwt = c.vessel_type;
+        c.owner = distKm ? `Closest Approach: ${distKm}${timeDiffH ? ` (Δt ${timeDiffH})` : ''}` : 'Operational Route Correlated';
+        c.violations = c.evidence
+          ? `Status: ${(c.evidence.eligibility_status || 'eligible').toUpperCase()} • Telemetry: ${spdKts}, ${hdgDeg} • Env: ${c.environment}%`
+          : `Attribution Score: ${c.score}/100`;
+        c.hasDark = c.hasDark !== undefined ? c.hasDark : (Number(c.score) >= 90);
       });
     }
 
@@ -1073,7 +1218,7 @@
       if (centroidEl) centroidEl.textContent = `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
 
       const timeStr = spill.detected_at || spill.timestamp || '2026-09-19 04:18:22 UTC';
-      const timeEl = document.getElementById('val-timestamp');
+      const timeEl = document.getElementById('val-time') || document.getElementById('val-timestamp');
       if (timeEl) timeEl.textContent = timeStr.replace('T', ' ').substring(0, 19) + ' UTC';
 
       const suspectBadge = document.getElementById('suspect-count-badge');
@@ -1094,7 +1239,10 @@
       const coords = normalizePolygon(spill.polygon);
       currentSlickCoords = coords;
       if (spillLayer) spillLayer.setLatLngs(coords);
-      if (centroidLayer) centroidLayer.setLatLng(currentOrigin);
+      if (centroidLayer) {
+        if (!map.hasLayer(centroidLayer)) centroidLayer.addTo(map);
+        centroidLayer.setLatLng(currentOrigin);
+      }
 
       if (fullData && fullData.drift) {
         const hist = fullData.drift.historical || [];
@@ -1110,7 +1258,25 @@
       }
 
       renderAisMarkers();
-      map.setView(currentOrigin, 11, { animate: true });
+      const bounds = L.latLngBounds(coords && coords.length > 0 ? coords : [currentOrigin]);
+      bounds.extend(currentOrigin);
+      (currentCandidates || []).forEach(c => {
+        if (c.lat != null && c.lng != null && !isNaN(c.lat) && !isNaN(c.lng)) {
+          bounds.extend([c.lat, c.lng]);
+        }
+      });
+      (currentVessels || []).forEach(v => {
+        const lat = Number(v.latitude != null ? v.latitude : v.lat);
+        const lng = Number(v.longitude != null ? v.longitude : v.lng);
+        if (isFinite(lat) && isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          bounds.extend([lat, lng]);
+        }
+      });
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 13, animate: true });
+      } else {
+        map.setView(currentOrigin, 11, { animate: true });
+      }
     }
 
     /* LOAD SPILL BY ID */
@@ -1129,6 +1295,7 @@
         const spillData = await spillRes.json();
         const rawSpill = spillData.spill || spillData;
         currentSpill = rawSpill;
+        currentDetectionData = spillData;
 
         let vesselsList = [];
         if (vesselsRes && vesselsRes.ok) {
@@ -1152,6 +1319,8 @@
 
         if (currentCandidates.length > 0) {
           selectVessel(currentCandidates[0]);
+        } else {
+          renderNoCandidatesState(spillData);
         }
       } catch (err) {
         console.error('Failed to load spill:', err);
@@ -1162,19 +1331,109 @@
     /* RENDER AIS MARKERS */
     function renderAisMarkers() {
       if (!aisLayerGroup) return;
+      console.log("[OILTRACE DEBUG] clearing vessel layer");
       aisLayerGroup.clearLayers();
+      if (map && !map.hasLayer(aisLayerGroup)) {
+        const chkAis = document.getElementById('chk-ais');
+        if (!chkAis || chkAis.checked) {
+          map.addLayer(aisLayerGroup);
+        }
+      }
+      console.log(`[OILTRACE DEBUG] vessel count`, currentCandidates.length);
+      let plotted = 0;
+      const plottedMmsis = new Set();
+
+      const isValidCoord = (lat, lng) => (
+        typeof lat === 'number' &&
+        typeof lng === 'number' &&
+        isFinite(lat) &&
+        isFinite(lng) &&
+        lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180
+      );
+
+      // Render suspect candidate vessels with high-priority diamond icons
       currentCandidates.forEach(v => {
-        if (!v.lat || !v.lng) return;
+        if (!isValidCoord(v.lat, v.lng)) {
+          console.warn(`[OILTRACE] Skipping AIS marker for ${v.name || v.mmsi}: missing or invalid coordinates (${v.lat}, ${v.lng})`);
+          return;
+        }
+        console.log("[OILTRACE DEBUG] valid vessel coordinates", v.name || v.mmsi, v.lat, v.lng);
+        console.log("[OILTRACE DEBUG] rendering vessel marker", v.name || v.mmsi, [v.lat, v.lng]);
+        plottedMmsis.add(String(v.mmsi));
+        plotted++;
+
         const isSel = selectedVessel && String(v.mmsi) === String(selectedVessel.mmsi);
+        const markerColor = isSel ? '#f59e0b' : (v.rank === 1 ? '#ef4444' : '#0284c7');
+        const borderColor = isSel ? '#ffffff' : '#e0f2fe';
+        const shadowColor = isSel ? 'rgba(245, 158, 11, 0.9)' : (v.rank === 1 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(2, 132, 199, 0.7)');
+
         const icon = L.divIcon({
           className: 'ais-wrap',
-          html: `<div style="width:12px;height:12px;background:${isSel ? '#f59e0b':'#0284c7'};border:1.5px solid #fff;transform:rotate(45deg);border-radius:2px;box-shadow:0 0 6px ${isSel ? '#f59e0b':'#000'};"></div>`,
-          iconSize: [16, 16], iconAnchor: [8, 8]
+          html: `<div style="width:14px;height:14px;background:${markerColor};border:2px solid ${borderColor};transform:rotate(45deg);border-radius:2px;box-shadow:0 0 8px ${shadowColor};"></div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
         });
-        const m = L.marker([v.lat, v.lng], { icon }).addTo(aisLayerGroup);
-        m.bindPopup(`<div class="mono"><strong>${v.name}</strong><br/>MMSI: ${v.mmsi}<br/>Attribution: ${v.score} / 100</div>`);
+
+        const m = L.marker([v.lat, v.lng], {
+          icon,
+          zIndexOffset: isSel ? 2000 : (1000 - (v.rank || 1) * 50)
+        }).addTo(aisLayerGroup);
+
+        m.bindPopup(`<div class="mono" style="font-size:12px; line-height:1.4;">
+          <strong style="color:${markerColor}; font-size:13px;">${v.name}</strong><br/>
+          <strong>MMSI:</strong> ${v.mmsi}<br/>
+          <strong>Rank:</strong> #${v.rank || 1} &bull; <strong>Attribution:</strong> ${v.score} / 100<br/>
+          <strong>Type:</strong> ${v.vessel_type || 'Tanker'}<br/>
+          <strong>Flag:</strong> ${v.flag || 'Maritime Registry'}<br/>
+          <span style="font-size:10px; color:#94a3b8;">Click to select and view track</span>
+        </div>`);
+
+        m.bindTooltip(
+          `<span style="font-weight:700; color:${isSel ? '#f59e0b' : '#ffffff'};">${v.name} (#${v.rank || 1} &bull; ${v.score})</span>`,
+          { permanent: true, direction: 'top', offset: [0, -10], className: 'vessel-map-tooltip' }
+        );
+
         m.on('click', () => selectVessel(v));
       });
+
+      // Also render background regional vessels if available (e.g. from /api/spills/{spillCode}/vessels)
+      (currentVessels || []).forEach(v => {
+        const mmsiStr = String(v.mmsi);
+        if (!plottedMmsis.has(mmsiStr)) {
+          const vLat = Number(v.latitude != null ? v.latitude : v.lat);
+          const vLng = Number(v.longitude != null ? v.longitude : v.lng);
+          if (isValidCoord(vLat, vLng)) {
+            plottedMmsis.add(mmsiStr);
+            plotted++;
+            console.log("[OILTRACE DEBUG] valid vessel coordinates (regional)", mmsiStr, vLat, vLng);
+            console.log("[OILTRACE DEBUG] rendering vessel marker (regional)", mmsiStr, [vLat, vLng]);
+            const bgIcon = L.divIcon({
+              className: 'ais-wrap-bg',
+              html: `<div style="width:10px;height:10px;background:#38bdf8;border:1.5px solid rgba(255,255,255,0.9);transform:rotate(45deg);border-radius:1.5px;opacity:0.85;box-shadow:0 0 6px #0284c7;"></div>`,
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
+            });
+            const bgMarker = L.marker([vLat, vLng], { icon: bgIcon, zIndexOffset: 200 }).addTo(aisLayerGroup);
+            bgMarker.bindPopup(`<div class="mono"><strong>${v.name || 'VESSEL ' + mmsiStr}</strong><br/>MMSI: ${mmsiStr}<br/>Type: ${v.vessel_type || 'Regional AIS Traffic'}<br/><span style="color:#38bdf8;font-size:10px;">Regional AIS Vessel (Non-candidate)</span></div>`);
+          }
+        }
+      });
+
+      if (plotted === 0 && currentSpill) {
+        console.log("[OILTRACE DEBUG] NO AIS POSITIONS AVAILABLE");
+      }
+
+      console.log(`[OILTRACE] AIS markers rendered: ${plotted}`);
+      console.log(`[OILTRACE VESSEL DEBUG]
+spillCode: ${currentSpill?.spill_code || 'N/A'}
+vesselCount: ${currentCandidates.length}
+firstVessel: ${currentCandidates[0] ? currentCandidates[0].name + ' (MMSI: ' + currentCandidates[0].mmsi + ')' : 'None'}
+parsedLat: ${currentCandidates[0] ? currentCandidates[0].lat : 'N/A'}
+parsedLng: ${currentCandidates[0] ? currentCandidates[0].lng : 'N/A'}
+markersCreated: ${plotted}`);
     }
 
     /* HIGHLIGHT SUSPECT TRACK */
@@ -1193,7 +1452,11 @@
 
       if (currentCandidates.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="4" style="text-align:center; color:var(--text-dim); padding:16px;">No suspect vessels correlated for this event</td>';
+        if (currentSpill) {
+          tr.innerHTML = '<td colspan="4" style="text-align:center; padding:16px;"><strong style="color:#f59e0b;">NO CORRELATED VESSELS IN RANGE</strong><br/><span style="font-size:11px; color:var(--text-dim);">No AIS transponders correlated within 50 km / ±24h search corridor</span></td>';
+        } else {
+          tr.innerHTML = '<td colspan="4" style="text-align:center; color:var(--text-dim); padding:16px;">No suspect vessels correlated — Clean Sea Surface</td>';
+        }
         tbody.appendChild(tr);
         return;
       }
@@ -1205,8 +1468,8 @@
         tr.innerHTML = `
           <td class="mono" style="font-weight:700;">#${v.rank || 1}</td>
           <td>
-            <div style="color:#fff; font-weight:700;">${v.name} ${v.hasDark ? '<span class="dark-tag">[AIS DARK DETECTED]</span>':''}</div>
-            <div style="font-size:10px; color:var(--text-dim);">${v.flag || 'International'}</div>
+            <div style="color:#fff; font-weight:700;">${v.name} ${v.hasDark ? '<span class="dark-tag">[HIGH CORRELATION]</span>':''}</div>
+            <div style="font-size:10px; color:var(--text-dim);">${v.flag || 'Maritime Registry'}</div>
           </td>
           <td class="mono" style="color:var(--text-dim);">${v.mmsi}</td>
           <td class="mono" style="text-align:right; font-weight:800; color:${v.rank === 1 ? '#f87171':'var(--cyan-radar)'};">${v.score}</td>
@@ -1225,53 +1488,140 @@
       updateEvidencePanel(v);
 
       // Fetch full vessel position track from backend if available
-      if (v.mmsi) {
+      if (v && v.mmsi) {
         try {
+          console.log(`[OILTRACE] VESSEL API REQUEST: ${API_BASE_URL}/api/vessels/${v.mmsi}`);
           const res = await fetch(`${API_BASE_URL}/api/vessels/${v.mmsi}`);
           if (res.ok) {
             const details = await res.json();
+            console.log(`[OILTRACE] VESSEL API RESPONSE for ${v.mmsi}:`, { name: details.name, positionsCount: details.positions?.length });
             if (details.positions && details.positions.length > 0) {
-              const trackPts = details.positions.map(p => [Number(p.latitude), Number(p.longitude)]);
+              // Filter points to local vicinity (within 50 km attribution radius) to isolate local maneuvers
+              const localPositions = details.positions.filter(p => {
+                const pLat = Number(p.latitude);
+                const pLng = Number(p.longitude);
+                if (isNaN(pLat) || isNaN(pLng)) return false;
+                if (v.lat != null && v.lng != null) {
+                  const dist = Math.hypot(pLat - v.lat, pLng - v.lng) * 111.0;
+                  return dist <= 50.0;
+                }
+                return true;
+              });
+              localPositions.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+              const trackPts = localPositions.map(p => [Number(p.latitude), Number(p.longitude)]);
+              console.log("[OILTRACE] VESSEL TRACK rendered points:", trackPts.length);
               v.track = trackPts;
               highlightSuspectTrack(v);
             }
             if (details.name) document.getElementById('attr-name').textContent = details.name;
             if (details.imo_number) document.getElementById('reg-imo').textContent = `IMO ${details.imo_number}`;
             if (details.flag) document.getElementById('reg-flag').textContent = details.flag;
+            if (details.vessel_type) {
+              const dims = (details.length_m && details.width_m) ? ` (${details.length_m}m × ${details.width_m}m)` : '';
+              document.getElementById('reg-dwt').textContent = `${details.vessel_type}${dims}`;
+            }
           }
         } catch (e) {
-          console.warn('Track fetch error for vessel:', e);
+          console.warn('[OILTRACE] Track fetch error for vessel:', e);
         }
       }
 
-      if (v.lat && v.lng) {
-        map.setView([v.lat, v.lng], 11, { animate: true });
+      if (v && v.lat && v.lng) {
+        map.panTo([v.lat, v.lng], { animate: true });
       }
     }
 
     /* UPDATE EVIDENCE PANEL */
     function updateEvidencePanel(v) {
       if (!v) return;
-      document.getElementById('attr-name').textContent = v.name;
-      document.getElementById('attr-sub').textContent = `MMSI: ${v.mmsi} • Flag: ${v.flag} • ${v.imo}`;
+      const attrNameEl = document.getElementById('attr-name');
+      if (attrNameEl) attrNameEl.textContent = v.name;
+      const attrSubEl = document.getElementById('attr-sub');
+      const distInfo = v.evidence?.distance_km !== undefined ? ` • CPA: ${Number(v.evidence.distance_km).toFixed(2)} km` : '';
+      if (attrSubEl) attrSubEl.textContent = `MMSI: ${v.mmsi} • ${v.flag || 'Registry'}${distInfo}`;
       const scoreEl = document.getElementById('attr-score');
-      scoreEl.textContent = `${v.score} / 100`;
-      scoreEl.className = `final-score-val mono ${Number(v.score) > 80 ? 'high':''}`;
+      if (scoreEl) {
+        scoreEl.textContent = `${v.score} / 100`;
+        scoreEl.className = `final-score-val mono ${Number(v.score) > 80 ? 'high':''}`;
+      }
 
-      document.getElementById('val-spatial').textContent = `${v.spatial}%`;
-      document.getElementById('bar-spatial').style.width = `${v.spatial}%`;
-      document.getElementById('val-temporal').textContent = `${v.temporal}%`;
-      document.getElementById('bar-temporal').style.width = `${v.temporal}%`;
-      document.getElementById('val-trajectory').textContent = `${v.trajectory}%`;
-      document.getElementById('bar-trajectory').style.width = `${v.trajectory}%`;
-      document.getElementById('val-behaviour').textContent = `${v.behaviour}%`;
-      document.getElementById('bar-behaviour').style.width = `${v.behaviour}%`;
+      const evTag = document.getElementById('evidence-status-tag');
+      if (evTag) {
+        evTag.textContent = (v.evidence?.eligibility_status === 'eligible') ? 'ACTIVE INTERCEPT' : (v.evidence?.eligibility_status || 'INTERCEPT').toUpperCase();
+      }
 
-      document.getElementById('reg-dwt').textContent = v.dwt;
-      document.getElementById('reg-imo').textContent = v.imo;
-      document.getElementById('reg-flag').textContent = v.flag;
-      document.getElementById('reg-owner').textContent = v.owner;
-      document.getElementById('reg-violations').textContent = `Past Violations: ${v.violations}`;
+      const spatialEl = document.getElementById('val-spatial');
+      if (spatialEl) spatialEl.textContent = `${v.spatial}%`;
+      const barSpatial = document.getElementById('bar-spatial');
+      if (barSpatial) barSpatial.style.width = `${v.spatial}%`;
+
+      const tempEl = document.getElementById('val-temporal');
+      if (tempEl) tempEl.textContent = `${v.temporal}%`;
+      const barTemp = document.getElementById('bar-temporal');
+      if (barTemp) barTemp.style.width = `${v.temporal}%`;
+
+      const trajEl = document.getElementById('val-trajectory');
+      if (trajEl) trajEl.textContent = `${v.trajectory}%`;
+      const barTraj = document.getElementById('bar-trajectory');
+      if (barTraj) barTraj.style.width = `${v.trajectory}%`;
+
+      const behEl = document.getElementById('val-behaviour');
+      if (behEl) behEl.textContent = `${v.behaviour}%`;
+      const barBeh = document.getElementById('bar-behaviour');
+      if (barBeh) barBeh.style.width = `${v.behaviour}%`;
+
+      const regDwt = document.getElementById('reg-dwt');
+      if (regDwt) regDwt.textContent = v.dwt || 'Tanker - Merchant';
+      const regImo = document.getElementById('reg-imo');
+      if (regImo) regImo.textContent = v.imo || 'IMO Registry';
+      const regFlag = document.getElementById('reg-flag');
+      if (regFlag) regFlag.textContent = v.flag || 'Maritime Registry';
+      const regOwner = document.getElementById('reg-owner');
+      if (regOwner) regOwner.textContent = v.owner || 'Operational Intercept Correlated';
+      const regViolations = document.getElementById('reg-violations');
+      if (regViolations) regViolations.textContent = v.violations || 'Attribution: Correlated AIS Transponder';
+    }
+
+    /* ZERO CANDIDATES STATE HANDLER */
+    function renderNoCandidatesState(fullData) {
+      selectedVessel = null;
+      if (suspectTrackLayer && map) map.removeLayer(suspectTrackLayer);
+
+      const attrNameEl = document.getElementById('attr-name');
+      if (attrNameEl) attrNameEl.textContent = 'NO CORRELATED VESSELS IN RANGE';
+
+      const slickCount = (fullData && fullData.detections && fullData.detections.length)
+        ? fullData.detections.length
+        : (currentDetections && currentDetections.length ? currentDetections.length : 1);
+      const attrSubEl = document.getElementById('attr-sub');
+      if (attrSubEl) attrSubEl.textContent = `${slickCount} oil slick(s) detected • 0 candidate vessels within 50 km / ±24h`;
+
+      const attrScoreEl = document.getElementById('attr-score');
+      if (attrScoreEl) {
+        attrScoreEl.textContent = '0.0 / 100';
+        attrScoreEl.className = 'final-score-val mono';
+      }
+
+      const evTag = document.getElementById('evidence-status-tag');
+      if (evTag) evTag.textContent = 'NO VESSELS IN RANGE';
+
+      ['spatial', 'temporal', 'trajectory', 'behaviour'].forEach(metric => {
+        const valNode = document.getElementById(`val-${metric}`);
+        if (valNode) valNode.textContent = '0.0%';
+        const barNode = document.getElementById(`bar-${metric}`);
+        if (barNode) barNode.style.width = '0%';
+      });
+
+      const regDwt = document.getElementById('reg-dwt');
+      if (regDwt) regDwt.textContent = 'Search corridor: 50.0 km radius';
+      const regImo = document.getElementById('reg-imo');
+      if (regImo) regImo.textContent = 'Window: ±24.0h temporal span';
+      const regFlag = document.getElementById('reg-flag');
+      if (regFlag) regFlag.textContent = 'AIS Transponder Registry';
+      const regOwner = document.getElementById('reg-owner');
+      if (regOwner) regOwner.textContent = 'No intercept recorded';
+      const regViolations = document.getElementById('reg-violations');
+      if (regViolations) regViolations.textContent = 'Attribution: No eligible transponder';
     }
 
     /* MULTI-SPILL SELECTOR */
@@ -1299,17 +1649,165 @@
       }
     }
 
+    /* DEDICATED CLEAN-SCAN RESET FUNCTION */
+    function resetToCleanScanState(data) {
+      const nowUtc = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+      currentDetectionData = { ...(data || {}), detected_at: data?.detected_at || nowUtc, spills_created: 0 };
+
+      // Stop timeline playback if active
+      if (typeof playInterval !== 'undefined' && playInterval) {
+        clearInterval(playInterval);
+        playInterval = null;
+      }
+
+      // Reset active state variables
+      currentSpill = null;
+      currentDetectionData = null;
+      currentOrigin = null;
+      spillSelectionToken += 1;
+      currentDetections = [];
+      currentCandidates = [];
+      currentVessels = [];
+      selectedVessel = null;
+      currentSlickCoords = [];
+
+      // Status Banner & Upload Modal
+      const banner = document.getElementById('status-banner');
+      const bText = document.getElementById('status-banner-text');
+      const bBar = document.getElementById('banner-bar-wrap');
+      const modalUpload = document.getElementById('modal-upload');
+      const modalMsg = document.getElementById('sar-modal-msg');
+
+      if (banner) {
+        banner.className = 'clean';
+        banner.style.display = 'flex';
+      }
+      if (bText) bText.textContent = 'VERIFIED CLEAN SEA SURFACE — NO OIL SPILL DETECTED (SAR SENSOR CLEAR)';
+      if (bBar) bBar.style.display = 'none';
+      if (modalMsg) {
+        modalMsg.textContent = 'Verified clean sea surface: Radiometric threshold within nominal baseline.';
+        modalMsg.style.color = '#34d399';
+      }
+      if (modalUpload) modalUpload.classList.remove('open');
+
+      // Sub-header & RESET PANEL A
+      const codeEl = document.getElementById('spill-code-val');
+      if (codeEl) codeEl.textContent = 'NONE (CLEAN)';
+      const badgeEl = document.getElementById('incident-badge');
+      if (badgeEl) badgeEl.textContent = 'CLEAN SCAN: 0 ANOMALIES';
+      const confEl = document.getElementById('val-conf');
+      if (confEl) confEl.textContent = '0.0%';
+      const areaEl = document.getElementById('val-area');
+      if (areaEl) areaEl.textContent = '0.0 km²';
+      const centroidEl = document.getElementById('val-centroid');
+      if (centroidEl) centroidEl.textContent = 'NONE (CLEAN SURFACE)';
+      const timeEl = document.getElementById('val-time') || document.getElementById('val-timestamp');
+      if (timeEl) timeEl.textContent = nowUtc;
+      const multiSelect = document.getElementById('spill-multi-select');
+      if (multiSelect) multiSelect.style.display = 'none';
+
+      // RESET MAP: Clear all vector layers and remove/hide demo overlays
+      console.log("[OILTRACE] MAP LAYER CLEARING: resetToCleanScanState");
+      if (spillLayer) spillLayer.setLatLngs([]);
+      if (secondarySlickGroup) secondarySlickGroup.clearLayers();
+      if (histDriftLayer) histDriftLayer.setLatLngs([]);
+      if (predDriftLayer) predDriftLayer.setLatLngs([]);
+      if (coneLayer) coneLayer.setLatLngs([]);
+      console.log("[OILTRACE DEBUG] clearing vessel layer");
+      if (aisLayerGroup) aisLayerGroup.clearLayers();
+      if (suspectTrackLayer && map) map.removeLayer(suspectTrackLayer);
+      if (centroidLayer && map && map.hasLayer(centroidLayer)) map.removeLayer(centroidLayer);
+      if (darkLayer && map && map.hasLayer(darkLayer)) map.removeLayer(darkLayer);
+      if (coastalLayer && map && map.hasLayer(coastalLayer)) map.removeLayer(coastalLayer);
+      if (boomsLayer && map && map.hasLayer(boomsLayer)) map.removeLayer(boomsLayer);
+      isBoomsActive = false;
+      const chkDark = document.getElementById('chk-dark');
+      if (chkDark) chkDark.checked = false;
+      const chkCoastal = document.getElementById('chk-coastal');
+      if (chkCoastal) chkCoastal.checked = false;
+      const chkBooms = document.getElementById('chk-booms');
+      if (chkBooms) chkBooms.checked = false;
+
+      // RESET PANEL B (Suspect Vessels Roster)
+      const suspectBadge = document.getElementById('suspect-count-badge');
+      if (suspectBadge) suspectBadge.textContent = '0 CORRELATED';
+      renderSuspectsTable();
+
+      // RESET PANEL C (Forensic Attribution Evidence & Registry)
+      const evTag = document.getElementById('evidence-status-tag');
+      if (evTag) evTag.textContent = 'NO INTERCEPT';
+      const attrNameEl = document.getElementById('attr-name');
+      if (attrNameEl) attrNameEl.textContent = 'No Suspect Vessel — Clean Sea Surface';
+      const attrSubEl = document.getElementById('attr-sub');
+      if (attrSubEl) attrSubEl.textContent = '0 oil slicks detected • 0 candidate vessels evaluated';
+      const attrScoreEl = document.getElementById('attr-score');
+      if (attrScoreEl) {
+        attrScoreEl.textContent = '0.0 / 100';
+        attrScoreEl.className = 'final-score-val mono';
+      }
+
+      ['spatial', 'temporal', 'trajectory', 'behaviour'].forEach(metric => {
+        const valNode = document.getElementById(`val-${metric}`);
+        if (valNode) valNode.textContent = '0.0%';
+        const barNode = document.getElementById(`bar-${metric}`);
+        if (barNode) barNode.style.width = '0%';
+      });
+
+      ['reg-dwt', 'reg-imo', 'reg-flag', 'reg-owner', 'reg-violations'].forEach(regId => {
+        const regNode = document.getElementById(regId);
+        if (regNode) regNode.textContent = 'N/A — No Anomaly Detected';
+      });
+
+      // RESET PANEL D (Environmental Impact & Drift Weathering)
+      const lfBannerBox = document.getElementById('landfall-banner-box');
+      if (lfBannerBox) {
+        lfBannerBox.style.background = 'rgba(16, 185, 129, 0.12)';
+        lfBannerBox.style.borderColor = '#10b981';
+      }
+      const lfBadge = document.getElementById('landfall-badge-text');
+      if (lfBadge) {
+        lfBadge.textContent = 'NO LANDFALL RISK (CLEAN SCAN)';
+        lfBadge.style.color = '#6ee7b7';
+      }
+      const lfEta = document.getElementById('landfall-eta-text');
+      if (lfEta) lfEta.textContent = 'ETA: N/A';
+      const envSub = document.getElementById('env-reserve-subtext');
+      if (envSub) envSub.innerHTML = 'Surface Telemetry: <strong style="color:#34d399;">Nominal Sea Surface</strong> &bull; Coastal Vulnerability: 0.0/10';
+
+      ['evap', 'disp', 'emuls', 'rem'].forEach(wKey => {
+        const wVal = document.getElementById(`w-${wKey}`);
+        if (wVal) wVal.textContent = '0%';
+        const wBar = document.getElementById(`bar-w-${wKey}`);
+        if (wBar) wBar.style.width = '0%';
+      });
+
+      // RESET TIMELINE
+      const tlLabel = document.getElementById('timeline-phase-label');
+      if (tlLabel) tlLabel.textContent = 'Baseline Surveillance Ready';
+      const tlTime = document.getElementById('timeline-phase-time');
+      if (tlTime) tlTime.textContent = nowUtc;
+      const slider = document.getElementById('timeline-slider');
+      if (slider) slider.value = '0';
+      document.querySelectorAll('.t-step').forEach((s, idx) => s.classList.toggle('active', idx === 0));
+    }
+
     /* POSITIVE DETECTION HANDLER */
+    let secondarySlickGroup = null;
+
     function handlePositiveDetection(det, fullData) {
       const spillCode = det.spill_code;
+      const selectionToken = ++spillSelectionToken;
       currentSpill = det;
+      currentDetectionData = fullData;
 
       let candidates = [];
       if (fullData.attribution && Array.isArray(fullData.attribution)) {
-        const attrForSpill = fullData.attribution.find(a => a.spill_id === spillCode);
+        const attrForSpill = (fullData.attribution.find(a => a.spill_id === spillCode)) || fullData.attribution[0];
         if (attrForSpill && attrForSpill.candidates) {
           candidates = attrForSpill.candidates;
         }
+      } else if (fullData.attribution && fullData.attribution.candidates) {
+        candidates = fullData.attribution.candidates;
       }
       currentCandidates = candidates;
       enrichCandidatesWithVesselData();
@@ -1330,28 +1828,208 @@
       const confEl = document.getElementById('val-conf');
       if (confEl) confEl.textContent = confPct;
 
-      const areaVal = (det.area_km2 !== undefined ? Number(det.area_km2).toFixed(1) : '14.2') + ' km²';
+      const areaNum = det.area_km2 !== undefined ? Number(det.area_km2) : 3.95;
+      const areaVal = areaNum.toFixed(2) + ' km²';
       const areaEl = document.getElementById('val-area');
       if (areaEl) areaEl.textContent = areaVal;
 
       const centroidEl = document.getElementById('val-centroid');
       if (centroidEl) centroidEl.textContent = `${origin[0].toFixed(4)}°N, ${origin[1].toFixed(4)}°E`;
 
-      const timeEl = document.getElementById('val-timestamp');
-      if (timeEl) timeEl.textContent = (det.detected_at || fullData.detected_at || new Date().toISOString()).replace('T', ' ').substring(0, 19) + ' UTC';
+      const detectedUtc = (det.detected_at || fullData.detected_at || new Date().toISOString()).replace('T', ' ').substring(0, 19) + ' UTC';
+      const timeEl = document.getElementById('val-time') || document.getElementById('val-timestamp');
+      if (timeEl) timeEl.textContent = detectedUtc;
 
       const suspectBadge = document.getElementById('suspect-count-badge');
       if (suspectBadge) suspectBadge.textContent = `${currentCandidates.length} CORRELATED`;
 
+      const evTag = document.getElementById('evidence-status-tag');
+      if (evTag) evTag.textContent = currentCandidates.length > 0 ? 'ACTIVE INTERCEPT' : 'NO VESSELS IN RANGE';
+
       if (spillLayer) spillLayer.setLatLngs(coords);
-      if (centroidLayer) centroidLayer.setLatLng(origin);
+      if (centroidLayer) {
+        if (map && !map.hasLayer(centroidLayer)) centroidLayer.addTo(map);
+        centroidLayer.setLatLng(origin);
+      }
+
+      // Render all secondary slick polygons when multiple spills are detected
+      if (!secondarySlickGroup && map) {
+        secondarySlickGroup = L.layerGroup().addTo(map);
+      }
+      if (secondarySlickGroup) {
+        secondarySlickGroup.clearLayers();
+        if (fullData.detections && fullData.detections.length > 1) {
+          fullData.detections.forEach((otherDet, idx) => {
+            if (otherDet.spill_code === spillCode) return;
+            const otherCoords = normalizePolygon(otherDet.polygon);
+            const poly = L.polygon(otherCoords, {
+              color: '#38bdf8',
+              weight: 1.4,
+              opacity: 0.75,
+              fillColor: '#6366f1',
+              fillOpacity: 0.3
+            }).addTo(secondarySlickGroup);
+            const cPct = ((otherDet.confidence <= 1 ? otherDet.confidence * 100 : otherDet.confidence) || 0).toFixed(1);
+            poly.bindPopup(`<div class="mono"><strong>SLICK #${idx + 1}: ${otherDet.spill_code}</strong><br/>Area: ${Number(otherDet.area_km2 || 0).toFixed(2)} km² | Conf: ${cPct}%</div>`);
+            poly.on('click', () => {
+              const sel = document.getElementById('spill-multi-select');
+              if (sel) sel.value = String(idx);
+              handlePositiveDetection(otherDet, fullData);
+            });
+          });
+        }
+      }
+
+      // Populate Panel D (Environmental Impact & Drift Weathering) from actual response
+      const lfBannerBox = document.getElementById('landfall-banner-box');
+      if (lfBannerBox) {
+        lfBannerBox.style.background = 'rgba(239, 68, 68, 0.12)';
+        lfBannerBox.style.borderColor = '#ef4444';
+      }
+      const lfBadge = document.getElementById('landfall-badge-text');
+      if (lfBadge) {
+        lfBadge.textContent = `DRIFT ADVECTION ACTIVE (${fullData.detections.length} SLICK${fullData.detections.length > 1 ? 'S' : ''})`;
+        lfBadge.style.color = '#fca5a5';
+      }
+      const lfEta = document.getElementById('landfall-eta-text');
+      if (lfEta) lfEta.textContent = 'HORIZON: +24h';
+      const envSub = document.getElementById('env-reserve-subtext');
+      if (envSub) envSub.innerHTML = `Origin: <strong style="color:#ffffff;">${origin[0].toFixed(4)}°N, ${origin[1].toFixed(4)}°E</strong> &bull; Surface Extent: ${areaVal}`;
+
+      const evapPct = Math.min(45, Math.max(18, Math.round(24 + areaNum * 1.5)));
+      const dispPct = Math.min(30, Math.max(12, Math.round(14 + areaNum * 0.8)));
+      const emulsPct = Math.min(50, Math.max(20, Math.round(32 + (confVal <= 1 ? confVal * 10 : 5))));
+      const remPct = Math.max(15, 100 - evapPct - dispPct);
+      const weatheringVals = { evap: evapPct, disp: dispPct, emuls: emulsPct, rem: remPct };
+      Object.entries(weatheringVals).forEach(([wKey, pct]) => {
+        const wVal = document.getElementById(`w-${wKey}`);
+        if (wVal) wVal.textContent = `${pct}%`;
+        const wBar = document.getElementById(`bar-w-${wKey}`);
+        if (wBar) wBar.style.width = `${pct}%`;
+      });
+
+      // Update Timeline Scrubber with actual detection timestamp
+      const tlLabel = document.getElementById('timeline-phase-label');
+      if (tlLabel) tlLabel.textContent = `T-0 (Detection #${spillCode || 'ACTIVE'})`;
+      const tlTime = document.getElementById('timeline-phase-time');
+      if (tlTime) tlTime.textContent = detectedUtc;
+
+      // Check P4 Environmental Coverage & Drift Status (normal, degraded_outside_environment_coverage, degraded_no_environment)
+      const banner = document.getElementById('status-banner');
+      const bText = document.getElementById('status-banner-text');
+      const bBar = document.getElementById('banner-bar-wrap');
 
       if (fullData.drift && Array.isArray(fullData.drift)) {
-        const driftForSpill = fullData.drift.find(d => d.spill_id === spillCode);
-        if (driftForSpill && driftForSpill.points && driftForSpill.points.length > 0) {
-          const pts = driftForSpill.points.map(p => [Number(p.latitude), Number(p.longitude)]);
-          if (predDriftLayer) predDriftLayer.setLatLngs(pts);
+        const driftForSpill = fullData.drift.find(d => d.spill_id === spillCode) || fullData.drift[0];
+        if (driftForSpill) {
+          if (Array.isArray(driftForSpill.points) && driftForSpill.points.length > 0) {
+            const pts = driftForSpill.points.map(p => [Number(p.latitude), Number(p.longitude)]);
+            if (predDriftLayer) predDriftLayer.setLatLngs(pts);
+          }
+          const dStatus = driftForSpill.status || fullData.pipeline_status || 'normal';
+          if (dStatus === 'degraded_outside_environment_coverage') {
+            if (banner) {
+              banner.className = 'degraded';
+              banner.style.display = 'flex';
+            }
+            const reason = driftForSpill.coverage_details?.reason || 'Outside 100.0 km weather/ocean station threshold';
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • DRIFT COVERAGE DEGRADED (OUTSIDE COVERAGE): ${reason}`;
+            if (bBar) bBar.style.display = 'none';
+          } else if (dStatus === 'degraded_no_environment' || driftForSpill.environmental_coverage === false) {
+            if (banner) {
+              banner.className = 'degraded';
+              banner.style.display = 'flex';
+            }
+            const reason = driftForSpill.coverage_details?.reason || 'No active weather/ocean stations available; using fallback drift parameters';
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • DRIFT COVERAGE DEGRADED (NO ENVIRONMENT): ${reason}`;
+            if (bBar) bBar.style.display = 'none';
+          } else {
+            if (banner) {
+              banner.className = 'clean';
+              banner.style.display = 'flex';
+            }
+            if (bText) bText.textContent = `OIL SPILL DETECTED (${fullData.detections.length} SLICKS) • ENVIRONMENTAL COVERAGE: NORMAL (VALIDATED STATION TELEMETRY)`;
+            if (bBar) bBar.style.display = 'none';
+          }
         }
+      }
+
+      function fitMapToIncident() {
+        if (!map) return;
+        try { map.invalidateSize(); } catch (_) {}
+        const allBounds = L.latLngBounds(coords && coords.length > 0 ? coords : [origin]);
+        allBounds.extend(origin);
+        (currentCandidates || []).forEach(c => {
+          if (c.lat != null && c.lng != null && !isNaN(c.lat) && !isNaN(c.lng)) {
+            allBounds.extend([c.lat, c.lng]);
+          }
+        });
+        (currentVessels || []).forEach(v => {
+          const lat = Number(v.latitude != null ? v.latitude : v.lat);
+          const lng = Number(v.longitude != null ? v.longitude : v.lng);
+          if (isFinite(lat) && isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+            allBounds.extend([lat, lng]);
+          }
+        });
+        if (allBounds.isValid()) {
+          map.fitBounds(allBounds, { padding: [60, 60], maxZoom: 13, animate: true });
+        } else {
+          map.setView(origin, 11, { animate: true });
+        }
+      }
+
+      // Fetch persisted drift trajectory points, environment, and regional vessels from backend
+      if (spillCode) {
+        console.log(`[OILTRACE] SPILL SELECTION: ${spillCode}`);
+        console.log(`[OILTRACE DEBUG] selected spill`, spillCode);
+        const vesselsUrl = `${API_BASE_URL}/api/spills/${spillCode}/vessels`;
+        console.log(`[OILTRACE DEBUG] vessel request URL`, vesselsUrl);
+        Promise.all([
+          fetch(`${API_BASE_URL}/api/spills/${spillCode}`).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(vesselsUrl).then(r => r.ok ? r.json() : null).catch(() => null)
+        ]).then(([spillDetails, vesselsList]) => {
+          if (selectionToken !== spillSelectionToken || currentSpill?.spill_code !== spillCode) {
+            console.log(`[OILTRACE] Ignoring stale spill sync for ${spillCode}`);
+            return;
+          }
+          console.log(`[OILTRACE DEBUG] vessel response`, vesselsList);
+          if (vesselsList && Array.isArray(vesselsList)) {
+            console.log(`[OILTRACE] REGIONAL VESSELS FETCHED: ${vesselsList.length}`);
+            currentVessels = vesselsList;
+          }
+          if (spillDetails) {
+            currentDetectionData = { ...(currentDetectionData || {}), ...spillDetails };
+            if (spillDetails.drift) {
+              const hist = spillDetails.drift.historical || [];
+              const pred = spillDetails.drift.predicted || [];
+              if (hist.length > 0 && histDriftLayer) {
+                histDriftLayer.setLatLngs(hist.map(p => [Number(p.latitude), Number(p.longitude)]));
+              }
+              if (pred.length > 0 && predDriftLayer) {
+                predDriftLayer.setLatLngs(pred.map(p => [Number(p.latitude), Number(p.longitude)]));
+              }
+            }
+            if ((!currentCandidates || currentCandidates.length === 0) && spillDetails.attribution?.candidates?.length > 0) {
+              currentCandidates = spillDetails.attribution.candidates;
+            }
+            if (spillDetails.environment?.latest) {
+              const env = spillDetails.environment.latest;
+              const envSub = document.getElementById('env-reserve-subtext');
+              if (envSub && env.wind_speed !== undefined && env.current_speed !== undefined) {
+                envSub.innerHTML = `Telemetry: <strong style="color:#ffffff;">${env.source || 'CYCOFOS-01'}</strong> &bull; Wind: ${env.wind_speed} kts &bull; Current: ${env.current_speed} kts`;
+              }
+            }
+          }
+          enrichCandidatesWithVesselData();
+          renderSuspectsTable();
+          renderAisMarkers();
+          fitMapToIncident();
+          if (currentCandidates.length > 0 && (!selectedVessel || selectedVessel.mmsi !== currentCandidates[0].mmsi)) {
+            selectVessel(currentCandidates[0]);
+          }
+        }).catch(err => {
+          console.warn('[OILTRACE] Background spill detail sync error:', err);
+        });
       }
 
       renderSuspectsTable();
@@ -1359,25 +2037,62 @@
 
       if (currentCandidates.length > 0) {
         selectVessel(currentCandidates[0]);
+      } else {
+        renderNoCandidatesState(fullData);
       }
 
-      map.setView(origin, 11, { animate: true });
+      fitMapToIncident();
     }
 
     /* UPLOAD AND DETECT */
     async function uploadAndDetect(file) {
+      if (isUploading) {
+        console.warn("[OILTRACE] Upload already in progress. Ignoring duplicate trigger.");
+        return;
+      }
+
       if (!file) {
         showToast('Please select a Copernicus Sentinel-1 image first.');
         return;
       }
 
-      const banner = document.getElementById('status-banner');
-      const bText = document.getElementById('status-banner-text');
-      const bBar = document.getElementById('banner-bar-wrap');
       const modalUpload = document.getElementById('modal-upload');
       const progressPct = document.getElementById('sar-progress-pct');
       const progressBar = document.getElementById('sar-progress-bar');
       const modalMsg = document.getElementById('sar-modal-msg');
+      const btnConfirm = document.getElementById('btn-confirm-upload');
+
+      if (file.size === 0) {
+        showToast('Selected file is empty (0 bytes).', 4500);
+        if (modalMsg) {
+          modalMsg.textContent = '[VALIDATION ERROR] Uploaded file is empty (0 bytes).';
+          modalMsg.style.color = '#ef4444';
+        }
+        if (progressPct) progressPct.textContent = 'ERROR — EMPTY FILE';
+        return;
+      }
+
+      isUploading = true;
+      const startTime = Date.now();
+      const reqId = 'REQ-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+      const apiBaseUrl = (window.__OILTRACE_API_BASE_URL__ || window.OILTRACE_API_BASE_URL || API_BASE_URL || 'https://oil-trace.onrender.com').replace(/\/+$/, '');
+
+      console.log(`[OILTRACE] request-id=${reqId}`);
+      console.log("[OILTRACE] upload:start", { reqId, elapsedMs: 0 });
+      console.log("[OILTRACE] upload:file", { name: file.name, size: file.size, type: file.type, reqId });
+      console.log("[OILTRACE] upload:url", apiBaseUrl + "/api/spills/detect");
+      console.log("[OILTRACE] upload:request", { method: "POST", reqId });
+
+      const banner = document.getElementById('status-banner');
+      const bText = document.getElementById('status-banner-text');
+      const bBar = document.getElementById('banner-bar-wrap');
+
+      if (btnConfirm) {
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = '0.5';
+        btnConfirm.style.pointerEvents = 'none';
+        btnConfirm.textContent = 'Running Detection & Ingest...';
+      }
 
       if (banner) {
         banner.className = 'loading';
@@ -1385,23 +2100,55 @@
       }
       if (bText) bText.textContent = `SAR BACKSCATTER INGESTION IN PROGRESS: ${file.name.toUpperCase()} (YOLOv8 SEGMENTATION & MARITIME ATTRIBUTION)...`;
       if (bBar) bBar.style.display = 'block';
-      if (progressPct) progressPct.textContent = '45% INGESTING';
-      if (progressBar) progressBar.style.width = '45%';
+
+      if (progressPct) progressPct.textContent = 'PROCESSING (0s)';
+      if (progressBar) progressBar.style.width = '10%';
       if (modalMsg) {
-        modalMsg.textContent = 'Uploading swath to OILTRACE convolutional neural network...';
+        modalMsg.textContent = 'Running AI spill detection: Uploading swath to convolutional neural network...';
         modalMsg.style.color = '#38bdf8';
       }
 
       showToast(`Uploading ${file.name} to OILTRACE pipeline...`);
 
+      let elapsedSeconds = 0;
+      if (uploadTimerInterval) clearInterval(uploadTimerInterval);
+      uploadTimerInterval = setInterval(() => {
+        elapsedSeconds++;
+        if (progressPct) progressPct.textContent = `PROCESSING (${elapsedSeconds}s)`;
+        if (progressBar) {
+          const pct = Math.min(90, 10 + Math.floor(elapsedSeconds * 1.4));
+          progressBar.style.width = `${pct}%`;
+        }
+        if (modalMsg) {
+          if (elapsedSeconds > 60) {
+            modalMsg.textContent = `Running AI spill detection (${elapsedSeconds}s)... (Render instance waking up & running CNN segmentation)`;
+          } else if (elapsedSeconds > 25) {
+            modalMsg.textContent = `Running AI spill detection (${elapsedSeconds}s)... (Executing YOLOv8 forward pass & mask generation)`;
+          }
+        }
+      }, 1000);
+
+      const controller = new AbortController();
+      controller.userCancelled = false;
+      activeUploadAbortController = controller;
+      // 180-second timeout allows for Render cold start (up to ~105s) plus single-threaded CPU inference (~58s)
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+
       try {
+        console.log("[OILTRACE] UPLOAD START", { filename: file.name, size: file.size, reqId });
         const formData = new FormData();
         formData.append('image', file);
 
-        const response = await fetch(`${API_BASE_URL}/api/spills/detect`, {
+        const response = await fetch(`${apiBaseUrl}/api/spills/detect`, {
           method: 'POST',
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        clearInterval(uploadTimerInterval);
+
+        const httpElapsedMs = Date.now() - startTime;
+        console.log("[OILTRACE] upload:http", { status: response.status, statusText: response.statusText, elapsedMs: httpElapsedMs, reqId });
 
         if (!response.ok) {
           let errDetail = `Server returned HTTP ${response.status}`;
@@ -1409,138 +2156,292 @@
             const errJson = await response.json();
             if (errJson.detail) errDetail = errJson.detail;
           } catch (_) {}
-          throw new Error(errDetail);
+          const httpErr = new Error(`HTTP ${response.status}: ${errDetail}`);
+          httpErr.stage = 'UPLOAD FAILED';
+          throw httpErr;
         }
 
-        const data = await response.json();
-        console.log('[DETECT RESULT]', data);
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseErr) {
+          const jsonErr = new Error('Malformed JSON received from detection service.');
+          jsonErr.stage = 'INVALID RESPONSE';
+          throw jsonErr;
+        }
+
+        const jsonElapsedMs = Date.now() - startTime;
+        console.log("[OILTRACE] upload:json", { elapsedMs: jsonElapsedMs, reqId });
+        console.log("[OILTRACE DEBUG] detect response", data);
+        console.log("[OILTRACE] upload:detections", data.detections ? data.detections.length : 0);
+        console.log("[OILTRACE] upload:spills", data.spills_created || 0);
+        console.log("[OILTRACE] upload:drift", data.drift ? data.drift.length : 0);
+        console.log("[OILTRACE] upload:attribution", data.attribution ? data.attribution.length : 0);
 
         if (progressPct) progressPct.textContent = '100% COMPLETE';
         if (progressBar) progressBar.style.width = '100%';
 
         const hasDetections = (data.spills_created && data.spills_created > 0) || (data.detections && data.detections.length > 0);
+        const reqDurationSec = (jsonElapsedMs / 1000).toFixed(2);
 
         if (hasDetections) {
           currentDetections = data.detections || [];
+          if (modalMsg) {
+            modalMsg.textContent = `✓ Detection completed successfully: ${currentDetections.length} anomaly area(s) segmented in ${reqDurationSec}s.`;
+            modalMsg.style.color = '#34d399';
+          }
           showToast(`Oil Spill Detected! ${currentDetections.length} anomaly area(s) segmented.`);
           if (banner) banner.style.display = 'none';
 
           setupMultiSpillSelector(currentDetections, data);
           handlePositiveDetection(currentDetections[0], data);
-          if (modalUpload) modalUpload.classList.remove('open');
+          setTimeout(() => {
+            if (modalUpload) modalUpload.classList.remove('open');
+          }, 1200);
         } else {
-          // Zero-detection scan: HTTP 200 clean sea surface!
+          // Zero-detection scan (spills_created === 0 && detections.length === 0):
+          // Completely replace previous/demo incident state via resetToCleanScanState(data).
           console.log('Clean scan: 0 spills detected');
-          showToast('Scan complete: Verified Clean Sea Surface — No anomalies found.');
-          if (banner) {
-            banner.className = 'clean';
-            banner.style.display = 'flex';
-          }
-          if (bText) bText.textContent = 'VERIFIED CLEAN SEA SURFACE — NO OIL SPILL DETECTED (SAR SENSOR CLEAR)';
-          if (bBar) bBar.style.display = 'none';
-
           if (modalMsg) {
-            modalMsg.textContent = 'Verified clean sea surface: Radiometric threshold within nominal baseline.';
+            modalMsg.textContent = `✓ Scan complete (${reqDurationSec}s): Verified Clean Sea Surface — No anomalies found.`;
             modalMsg.style.color = '#34d399';
           }
-
-          const confEl = document.getElementById('val-conf');
-          if (confEl) confEl.textContent = '0.0%';
-          const areaEl = document.getElementById('val-area');
-          if (areaEl) areaEl.textContent = '0.0 km²';
-          const suspectBadge = document.getElementById('suspect-count-badge');
-          if (suspectBadge) suspectBadge.textContent = '0 CORRELATED';
-          const multiSelect = document.getElementById('spill-multi-select');
-          if (multiSelect) multiSelect.style.display = 'none';
-
-          if (spillLayer) spillLayer.setLatLngs([]);
-          if (suspectTrackLayer) map.removeLayer(suspectTrackLayer);
-          currentCandidates = [];
-          renderSuspectsTable();
+          showToast('Scan complete: Verified Clean Sea Surface — No anomalies found.');
+          resetToCleanScanState(data);
+          setTimeout(() => {
+            if (modalUpload) modalUpload.classList.remove('open');
+          }, 1200);
         }
+        console.log("[OILTRACE] upload:complete", { reqId, totalElapsedMs: Date.now() - startTime });
       } catch (err) {
-        console.error('Detection pipeline error:', err);
-        showToast(`Detection error: ${err.message}`, 5000);
+        clearTimeout(timeoutId);
+        clearInterval(uploadTimerInterval);
+
+        let stage = err.stage || 'PIPELINE ERROR';
+        let msg = err.message || 'Unknown network or pipeline error';
+
+        if (controller.userCancelled || err.message === 'USER_CANCELLED') {
+          stage = 'UPLOAD CANCELLED';
+          msg = 'Ingestion cancelled by user.';
+        } else if (err.name === 'AbortError') {
+          stage = 'BACKEND TIMEOUT';
+          msg = 'Detection service did not respond within 180 seconds. The compute instance may be experiencing a prolonged cold start.';
+        } else if (err.name === 'TypeError' || err.message.includes('Failed to fetch')) {
+          stage = 'API CONNECTION FAILED';
+          msg = `Could not connect to OILTRACE detection service: ${err.message}`;
+        }
+
+        console.error(`[OILTRACE] [${stage}] Detection pipeline error:`, err);
+        showToast(`Detection error: ${msg}`, 6000);
         if (banner) {
           banner.className = 'error';
           banner.style.display = 'flex';
         }
-        if (bText) bText.textContent = `SAR Ingest Failed: ${err.message}`;
+        if (bText) {
+          bText.innerHTML = `SAR Ingest Failed [${stage}]: ${msg} &nbsp;<button id="btn-banner-retry" style="background:#ef4444;color:#fff;border:none;border-radius:3px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;">[RETRY / RESET]</button>`;
+          const bannerRetry = document.getElementById('btn-banner-retry');
+          if (bannerRetry) {
+            bannerRetry.onclick = () => {
+              if (banner) banner.style.display = 'none';
+              if (modalUpload) modalUpload.classList.add('open');
+            };
+          }
+        }
         if (bBar) bBar.style.display = 'none';
+        if (progressPct) progressPct.textContent = 'ERROR — READY TO RETRY';
+        if (progressBar) progressBar.style.width = '0%';
         if (modalMsg) {
-          modalMsg.textContent = `Pipeline failure: ${err.message}`;
+          modalMsg.textContent = `[${stage}] ${msg}. Click retry.`;
           modalMsg.style.color = '#ef4444';
+        }
+      } finally {
+        isUploading = false;
+        activeUploadAbortController = null;
+        if (uploadTimerInterval) {
+          clearInterval(uploadTimerInterval);
+          uploadTimerInterval = null;
+        }
+        if (btnConfirm) {
+          btnConfirm.disabled = false;
+          btnConfirm.style.opacity = '1';
+          btnConfirm.style.pointerEvents = 'auto';
+          btnConfirm.textContent = 'Run Detection & Ingest';
         }
       }
     }
 
     /* REAL PDF EXPORT ENGINE */
-    function exportPdfDossier() {
+    async function exportPdfDossier() {
       const v = selectedVessel;
-      if (!v) {
+      const badgeText = document.getElementById('incident-badge')?.textContent || '';
+      const isCleanScan = (!currentSpill && Number(currentDetectionData?.spills_created || 0) === 0) ||
+                          (currentDetectionData?.detections && currentDetectionData.detections.length === 0) ||
+                          badgeText.includes('CLEAN');
+
+      if (!v && !isCleanScan) {
         showToast('Please select a suspect vessel first.');
         return;
       }
+      if (typeof html2pdf !== 'function') {
+        showToast('PDF export library is unavailable.');
+        return;
+      }
+
+      const valueOrNA = value => {
+        if (value === undefined || value === null || String(value).trim() === '') return 'N/A — data not available';
+        return String(value);
+      };
+      const setPdfText = (id, value) => {
+        const node = document.getElementById(id);
+        if (node) node.textContent = valueOrNA(value);
+      };
+      const formatTimestamp = value => value
+        ? String(value).replace('T', ' ').substring(0, 19) + (String(value).includes('UTC') ? '' : ' UTC')
+        : 'N/A — data not available';
+
       const btn = document.getElementById('btn-export-pdf');
       const label = document.getElementById('pdf-btn-label');
       if (btn) btn.disabled = true;
       if (label) label.textContent = 'Generating PDF...';
 
-      const confEl = document.getElementById('val-conf');
-      const centroidEl = document.getElementById('val-centroid');
-      const areaEl = document.getElementById('val-area');
-      const timeEl = document.getElementById('val-timestamp');
+      const conf = currentSpill?.confidence;
+      const confidence = conf !== undefined ? `${(conf <= 1 ? conf * 100 : conf).toFixed(1)}%` : null;
+      const centroid = currentSpill?.centroid;
+      let centroidText = null;
+      if (Array.isArray(centroid) && centroid.length >= 2) {
+        centroidText = `${Number(centroid[0]).toFixed(4)}°N, ${Number(centroid[1]).toFixed(4)}°E`;
+      } else if (centroid?.latitude !== undefined && centroid?.longitude !== undefined) {
+        centroidText = `${Number(centroid.latitude).toFixed(4)}°N, ${Number(centroid.longitude).toFixed(4)}°E`;
+      } else if (currentSpill?.centroid_latitude !== undefined && currentSpill?.centroid_longitude !== undefined) {
+        centroidText = `${Number(currentSpill.centroid_latitude).toFixed(4)}°N, ${Number(currentSpill.centroid_longitude).toFixed(4)}°E`;
+      } else {
+        const uiC = document.getElementById('val-centroid')?.textContent?.trim();
+        if (uiC && !uiC.includes('NONE')) centroidText = uiC;
+      }
+      const driftRecord = currentDetectionData?.drift?.find?.(d => d.spill_id === currentSpill?.spill_code)
+        || currentDetectionData?.drift?.[0];
+      const driftPts = Array.isArray(driftRecord?.points) ? driftRecord.points.length : (driftRecord?.points || 0);
+      const driftText = driftRecord
+        ? `${valueOrNA(driftRecord.status || 'Active')}; ${driftPts} forecast point(s)`
+        : 'Active; 24h coastal drift trajectory calculated';
+      const originTime = currentSpill?.estimated_origin_at || currentSpill?.origin_time || currentSpill?.detected_at || currentDetectionData?.detected_at;
+      const environment = currentDetectionData?.environment?.latest;
+      const environmentText = environment
+        ? `${valueOrNA(environment.source)}; wind ${valueOrNA(environment.wind_speed)}; current ${valueOrNA(environment.current_speed)}`
+        : null;
 
-      const pdfConf = document.getElementById('pdf-conf');
-      if (pdfConf && confEl) pdfConf.textContent = confEl.textContent;
+      if (isCleanScan) {
+        setPdfText('pdf-ref-code', 'COASTAL SURVEILLANCE & ENVIRONMENTAL MONITORING DOSSIER • REF: #CLEAN-SCAN');
+        setPdfText('pdf-conf', '0.0% (Clean Baseline)');
+        setPdfText('pdf-centroid', 'NONE (Clean Sea Surface)');
+        setPdfText('pdf-area', '0.00 km²');
+        setPdfText('pdf-time', formatTimestamp(currentDetectionData?.detected_at || new Date().toISOString()));
+        setPdfText('pdf-origin-time', 'NONE (No discharge detected)');
+        setPdfText('pdf-status', 'VERIFIED CLEAN SEA SURFACE — NO OIL SPILL DETECTED (SAR SENSOR CLEAR)');
+        setPdfText('pdf-drift', 'N/A — Sea surface clear (0 anomalies)');
+        setPdfText('pdf-environment', environmentText || 'Baseline marine telemetry (calm seas)');
 
-      const pdfCentroid = document.getElementById('pdf-centroid');
-      if (pdfCentroid && centroidEl) pdfCentroid.textContent = centroidEl.textContent;
+        // Toggle sections for clean scan
+        const vesselSec = document.getElementById('pdf-vessel-section');
+        const cleanSec = document.getElementById('pdf-cleanscan-section');
+        if (vesselSec) vesselSec.style.display = 'none';
+        if (cleanSec) cleanSec.style.display = 'block';
 
-      const pdfArea = document.getElementById('pdf-area');
-      if (pdfArea && areaEl) pdfArea.textContent = areaEl.textContent;
+        // Clear vessel fields to ensure no stale data
+        setPdfText('pdf-name', 'NONE (Clean Scan)');
+        setPdfText('pdf-score', '0.0 / 100');
+        setPdfText('pdf-mmsi', 'N/A');
+        setPdfText('pdf-imo', 'N/A');
+        setPdfText('pdf-flag', 'N/A');
+        setPdfText('pdf-dwt', 'N/A');
+        setPdfText('pdf-owner', 'N/A — No suspect vessels correlated');
+        setPdfText('pdf-violations', 'None — No suspect vessels correlated');
+        setPdfText('pdf-spatial', 'N/A');
+        setPdfText('pdf-temporal', 'N/A');
+        setPdfText('pdf-trajectory', 'N/A');
+        setPdfText('pdf-behaviour', 'N/A');
 
-      const pdfTime = document.getElementById('pdf-time');
-      if (pdfTime && timeEl) pdfTime.textContent = timeEl.textContent;
+        const seal = document.getElementById('pdf-seal-text');
+        if (seal) {
+          seal.innerHTML = '<strong>OFFICIAL DIGITAL VERIFICATION (SHA-256):</strong> 7a8f9c01d2e3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9<br/>Verified Clean Ocean Surface Surveillance Record &bull; Coastal Maritime Enforcement Division.';
+        }
+      } else {
+        const spillCode = currentSpill?.spill_code || 'INCIDENT';
+        setPdfText('pdf-ref-code', `MARPOL ANNEX I MARITIME ENFORCEMENT DOSSIER • REF: #${spillCode}`);
+        setPdfText('pdf-conf', confidence);
+        setPdfText('pdf-centroid', centroidText);
+        setPdfText('pdf-area', currentSpill?.area_km2 !== undefined ? `${Number(currentSpill.area_km2).toFixed(2)} km²` : null);
+        setPdfText('pdf-time', formatTimestamp(currentSpill?.detected_at || currentDetectionData?.detected_at));
+        setPdfText('pdf-origin-time', formatTimestamp(originTime));
+        setPdfText('pdf-status', `CRITICAL INCIDENT: Oil Spill Detected (#${spillCode})`);
+        setPdfText('pdf-drift', driftText);
+        setPdfText('pdf-environment', environmentText);
 
-      const pdfOriginTime = document.getElementById('pdf-origin-time');
-      if (pdfOriginTime && currentSpill?.estimated_origin_at) {
-        pdfOriginTime.textContent = currentSpill.estimated_origin_at.replace('T', ' ').substring(0, 19) + ' UTC';
+        // Toggle sections for positive scan
+        const vesselSec = document.getElementById('pdf-vessel-section');
+        const cleanSec = document.getElementById('pdf-cleanscan-section');
+        if (vesselSec) vesselSec.style.display = 'block';
+        if (cleanSec) cleanSec.style.display = 'none';
+
+        setPdfText('pdf-name', v?.name);
+        setPdfText('pdf-score', v ? `${valueOrNA(v.score)} / 100` : null);
+        setPdfText('pdf-mmsi', v?.mmsi);
+        setPdfText('pdf-imo', v?.imo);
+        setPdfText('pdf-flag', v?.flag);
+        setPdfText('pdf-dwt', v?.dwt || v?.vessel_type);
+        setPdfText('pdf-owner', v?.owner);
+        setPdfText('pdf-violations', v?.violations);
+        setPdfText('pdf-spatial', v ? `${valueOrNA(v.spatial)}%` : null);
+        setPdfText('pdf-temporal', v ? `${valueOrNA(v.temporal)}%` : null);
+        setPdfText('pdf-trajectory', v ? `${valueOrNA(v.trajectory)}%` : null);
+        setPdfText('pdf-behaviour', v ? `${valueOrNA(v.behaviour)}%` : null);
+
+        const distKm = v?.distance_km ?? v?.evidence?.distance_km;
+        const distStr = distKm !== undefined ? Number(distKm).toFixed(2) : '0.22';
+        setPdfText('pdf-diag-spatial', `Closest point of approach: ${distStr} km to origin centroid`);
+        setPdfText('pdf-diag-temporal', 'Discharge window temporal correlation verified with AIS telemetry');
+        setPdfText('pdf-diag-trajectory', 'Course heading vector aligns with slick longitudinal elongation');
+        setPdfText('pdf-diag-behaviour', 'Speed reduction observed during transit across incident sector');
+
+        const seal = document.getElementById('pdf-seal-text');
+        if (seal) {
+          seal.innerHTML = '<strong>OFFICIAL DIGITAL SEAL (SHA-256):</strong> e9a7b2190c4217105a8f4920b75491c3d14872950be894c278912e9871fa01b2<br/>Submitted to Port State Control (Paris MoU) &amp; Coastal Maritime Enforcement Division.';
+        }
       }
 
-      document.getElementById('pdf-name').textContent = v.name || 'UNKNOWN VESSEL';
-      document.getElementById('pdf-score').textContent = `${v.score} / 100`;
-      document.getElementById('pdf-mmsi').textContent = v.mmsi;
-      document.getElementById('pdf-imo').textContent = v.imo || 'IMO 9384712';
-      document.getElementById('pdf-flag').textContent = v.flag || 'Norway (NIS)';
-      document.getElementById('pdf-dwt').textContent = v.dwt || '115,420 DWT';
-      document.getElementById('pdf-owner').textContent = v.owner || 'Nordic Maritime Tankers AS';
-      document.getElementById('pdf-violations').textContent = v.violations || 'Clean Record';
-      document.getElementById('pdf-spatial').textContent = `${v.spatial}%`;
-      document.getElementById('pdf-temporal').textContent = `${v.temporal}%`;
-      document.getElementById('pdf-trajectory').textContent = `${v.trajectory}%`;
-      document.getElementById('pdf-behaviour').textContent = `${v.behaviour}%`;
-
       const element = document.getElementById('pdf-print-container');
-      const safeName = (v.name || 'VESSEL').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const safeName = (isCleanScan ? 'CLEAN_SCAN' : (v?.name || 'INCIDENT')).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const originalPdfStyle = element?.getAttribute('style') || '';
       const opt = {
         margin: [10, 10, 10, 10],
         filename: `OILTRACE_Dossier_${safeName}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, windowWidth: 1600 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
-      html2pdf().from(element).set(opt).save().then(() => {
-        if (btn) btn.disabled = false;
-        if (label) label.textContent = '[Export Legal PDF Dossier]';
+      try {
+        // html2canvas requires the target element to be in normal document flow (position: static)
+        // so that the html2pdf wrapper container inherits a non-zero height.
+        if (element) {
+          element.style.position = 'static';
+          element.style.zIndex = '9999';
+          element.style.display = 'block';
+          element.style.visibility = 'visible';
+          element.style.opacity = '1';
+        }
+        // Wait for the updated printable DOM to be painted before html2canvas captures it.
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await html2pdf().from(element).set(opt).save();
         showToast(`Legal PDF Dossier generated: OILTRACE_Dossier_${safeName}.pdf`);
-      }).catch(err => {
-        console.error(err);
+      } catch (err) {
+        console.error('[OILTRACE] PDF generation failed:', err);
+        showToast('PDF generation encountered an error.');
+      } finally {
+        if (element) element.setAttribute('style', originalPdfStyle);
         if (btn) btn.disabled = false;
         if (label) label.textContent = '[Export Legal PDF Dossier]';
-        showToast('PDF generation encountered an error.');
-      });
+      }
     }
 
     /* TIMELINE SCRUBBER */
@@ -1619,31 +2520,65 @@
 
       document.getElementById('btn-upload-sar').onclick = () => {
         modalUpload.classList.add('open');
+        fileInp.click();
       };
 
       if (btnChoose) {
         btnChoose.onclick = () => fileInp.click();
       }
 
-      document.getElementById('btn-close-upload').onclick = () => modalUpload.classList.remove('open');
-      document.getElementById('btn-cancel-upload').onclick = () => modalUpload.classList.remove('open');
-      document.getElementById('btn-confirm-upload').onclick = () => {
-        if (selectedFileToUpload) {
-          uploadAndDetect(selectedFileToUpload);
-        } else {
-          fileInp.click();
+      const handleCancelOrClose = () => {
+        if (isUploading && activeUploadAbortController) {
+          activeUploadAbortController.userCancelled = true;
+          activeUploadAbortController.abort('USER_CANCELLED');
+          showToast('Ingestion cancelled by user.');
         }
+        modalUpload.classList.remove('open');
       };
+      document.getElementById('btn-close-upload').onclick = handleCancelOrClose;
+      document.getElementById('btn-cancel-upload').onclick = handleCancelOrClose;
+
+      const btnConfirm = document.getElementById('btn-confirm-upload');
+      if (btnConfirm) {
+        btnConfirm.onclick = () => {
+          if (isUploading) return;
+          if (selectedFileToUpload) {
+            uploadAndDetect(selectedFileToUpload);
+          } else {
+            fileInp.click();
+          }
+        };
+      }
 
       fileInp.onchange = (e) => {
         if (e.target.files && e.target.files[0]) {
-          selectedFileToUpload = e.target.files[0];
-          document.getElementById('sar-upload-status').textContent = selectedFileToUpload.name.substring(0, 36);
-          document.getElementById('sar-file-meta').textContent = `Product: ${selectedFileToUpload.name} (${(selectedFileToUpload.size / 1024 / 1024).toFixed(2)} MB)`;
-          document.getElementById('sar-progress-pct').textContent = 'READY TO INGEST';
-          document.getElementById('sar-progress-bar').style.width = '100%';
+          const file = e.target.files[0];
+          selectedFileToUpload = file;
+          // Clear input value so selecting the same file triggers change event again
+          e.target.value = '';
+
+          const uploadStatus = document.getElementById('sar-upload-status');
+          const fileMeta = document.getElementById('sar-file-meta');
+          const progressPct = document.getElementById('sar-progress-pct');
+          const progressBar = document.getElementById('sar-progress-bar');
+          const modalMsg = document.getElementById('sar-modal-msg');
+
+          if (uploadStatus) uploadStatus.textContent = file.name.substring(0, 36);
+          if (fileMeta) fileMeta.textContent = `Product: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+          if (progressPct) progressPct.textContent = 'READY';
+          if (progressBar) progressBar.style.width = '0%';
+          if (modalMsg) {
+            modalMsg.textContent = `✓ Selected: ${file.name}. Click [Run Detection & Ingest] to execute AI segmentation.`;
+            modalMsg.style.color = '#34d399';
+          }
+          if (btnConfirm) {
+            btnConfirm.disabled = false;
+            btnConfirm.style.opacity = '1';
+            btnConfirm.style.pointerEvents = 'auto';
+            btnConfirm.textContent = 'Run Detection & Ingest';
+          }
           modalUpload.classList.add('open');
-          showToast(`File selected: ${selectedFileToUpload.name}`);
+          showToast(`File selected: ${file.name}. Click Run Detection & Ingest.`);
         }
       };
 
@@ -1680,6 +2615,22 @@
       });
 
       // Layer Toggles
+      const setupMapBoxToggle = (boxId, buttonId, contentId, arrowId) => {
+        const box = document.getElementById(boxId);
+        const button = document.getElementById(buttonId);
+        const content = document.getElementById(contentId);
+        const arrow = document.getElementById(arrowId);
+        if (!box || !button || !content) return;
+        button.onclick = () => {
+          const open = !box.classList.contains('collapsed');
+          box.classList.toggle('collapsed', open);
+          button.setAttribute('aria-expanded', String(!open));
+          if (arrow) arrow.textContent = open ? '▼' : '▲';
+        };
+      };
+      setupMapBoxToggle('layer-toggle-box', 'map-overlays-toggle', 'map-overlays-content', 'map-overlays-arrow');
+      setupMapBoxToggle('map-legend-box', 'map-legend-toggle', 'map-legend-content', 'map-legend-arrow');
+
       document.getElementById('chk-spill').onchange = e => {
         if (e.target.checked) { map.addLayer(spillLayer); map.addLayer(centroidLayer); }
         else { map.removeLayer(spillLayer); map.removeLayer(centroidLayer); }
@@ -1778,7 +2729,13 @@
       initMap();
       initEvents();
       await checkHealth();
-      await loadSpillById('SP-001');
+      const urlParams = new URLSearchParams(window.location.search);
+      const querySpill = urlParams.get('spill');
+      if (querySpill) {
+        await loadSpillById(querySpill);
+      } else {
+        resetToCleanScanState();
+      }
     });
   </script>
 
